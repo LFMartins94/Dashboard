@@ -1,6 +1,6 @@
 """
-database.py (Versão PostgreSQL Otimizada)
-=========================================
+database.py (Versão PostgreSQL Otimizada para Supabase Pooler)
+============================================================
 Módulo de persistência em nuvem utilizando SQLAlchemy e PostgreSQL.
 Focado em alta performance (Bulk Insert) e segurança para dados contábeis.
 """
@@ -24,16 +24,26 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Gerenciamento Seguro de Conexão (Hardening via Environment Variables)
 # ---------------------------------------------------------------------------
-# Em desenvolvimento local, ele usará o SQLite como fallback. 
-# Na nuvem, você preencherá a variável DATABASE_URL com o link do seu Postgres.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///financeiro.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# O pool_size e max_overflow controlam a concorrência para não estourar o plano gratuito
+# Fallback de segurança caso rode localmente sem a variável configurada
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///financeiro.db"
+
+# Correção automática de dialeto exigida pelo SQLAlchemy moderno
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O POOLER DO SUPABASE (PORTA 6543)
+# - pool_size e max_overflow: controlam a concorrência dentro do limite do plano.
+# - pool_recycle: Fecha conexões ociosas a cada 30 min, evitando a queda do pooler.
+# - pool_pre_ping: Garante resiliência testando a conexão antes de executar o SQL.
 engine = create_engine(
     DATABASE_URL,
     pool_size=5,
     max_overflow=10,
-    pool_pre_ping=True  # Testa se a conexão caiu antes de usá-la (Resiliência)
+    pool_recycle=1800,
+    pool_pre_ping=True
 )
 
 SENTINEL: str = "NÃO ENCONTRADO"
@@ -146,7 +156,7 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo") -> int
                 con=conn,
                 if_exists="append",
                 index=False,
-                method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
+                幕method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
                 chunksize=1000  # Envia de 1000 em 1000 linhas por bloco
             )
         return len(df_final)
