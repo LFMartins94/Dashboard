@@ -15,7 +15,7 @@ import streamlit as st
 from database import (
     carregar_todos_os_gastos,
     inicializar_banco,
-    salvar_dataframe,
+    salvar_dataframe_otimizado,  # Atualizado para a versão em lote refatorada
     salvar_registro,
 )
 from parsers import processar_arquivo
@@ -52,231 +52,117 @@ def _init_session() -> None:
         st.session_state.db_financeiro = carregar_todos_os_gastos()
 
 
-def _recarregar_dados() -> None:
-    """Força a releitura completa dos dados do SQLite para a sessão."""
+def _atualizar_dados_sessao() -> None:
+    """Sincroniza o estado da sessão com os dados mais recentes do banco."""
     st.session_state.db_financeiro = carregar_todos_os_gastos()
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — Inserção Manual
+# Componente: Sidebar (Inserção Manual)
 # ---------------------------------------------------------------------------
 def _render_sidebar() -> None:
-    """
-    Renderiza o formulário lateral de inserção manual.
-    Persiste no SQLite e atualiza o estado da sessão ao submeter.
-    """
-    st.sidebar.header("✏️ Inserção Manual")
+    """Renderiza o formulário de inserção manual de registros na barra lateral."""
+    with st.sidebar:
+        st.header("📝 Lançamento Manual")
+        st.markdown("Insira despesas avulsas diretamente na base de dados.")
 
-    with st.sidebar.form(key="form_manual", clear_on_submit=True):
-        data_input: date = st.date_input(
-            "Data da despesa",
-            value=date.today(),
-            format="DD/MM/YYYY",
-        )
-        categoria_input: str = st.selectbox(
-            "Categoria",
-            options=CATEGORIAS,
-        )
-        valor_input: float = st.number_input(
-            "Valor (R$)",
-            min_value=0.01,
-            step=0.01,
-            format="%.2f",
-        )
-        submitted = st.form_submit_button("💾 Salvar registro", use_container_width=True)
+        with st.form("form_registro_manual", clear_on_submit=True):
+            campo_data = st.date_input("Data do Gasto", value=date.today())
+            campo_categoria = st.selectbox("Categoria", options=CATEGORIAS)
+            campo_valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f")
 
-    if submitted:
-        try:
-            salvar_registro(
-                data=data_input,
-                categoria=categoria_input,
-                valor=valor_input,
-                origem="manual",
-            )
-            _recarregar_dados()
-            st.sidebar.success(
-                f"✅ Registro salvo: **{categoria_input}** — R$ {valor_input:,.2f} em {data_input.strftime('%d/%m/%Y')}"
-            )
-        except Exception as exc:
-            logger.error("Erro ao salvar registro manual: %s", exc)
-            st.sidebar.error(f"❌ Falha ao salvar: {exc}")
+            botao_submeter = st.form_submit_button("Gravar Registro")
 
-    st.sidebar.divider()
-    st.sidebar.caption(f"📦 {len(st.session_state.db_financeiro)} registros no banco.")
+            if botao_submeter:
+                if campo_valor <= 0:
+                    st.error("O valor do gasto deve ser maior que R$ 0,00.")
+                    return
+
+                sucesso = salvar_registro(
+                    data_val=campo_data,
+                    categoria=campo_categoria,
+                    valor_val=campo_valor,
+                    origem="manual",
+                )
+
+                if sucesso:
+                    st.success("Registro manual salvo com sucesso!")
+                    _atualizar_dados_sessao()
+                else:
+                    st.error("Erro crítico ao tentar persistir o registro no banco.")
 
 
 # ---------------------------------------------------------------------------
-# Área central — Upload Multifonte
+# Aba 1: Ingestão e Upload de Arquivos
 # ---------------------------------------------------------------------------
 def _render_upload() -> None:
-    """
-    Renderiza a área de upload de arquivos.
-    Chama o parser adequado por extensão, salva no SQLite e recarrega.
-    """
-    st.subheader("📂 Upload Multifonte")
-    st.caption("Formatos aceitos: **XLSX**, **CSV**, **PDF**, **PPTX**")
-
-    arquivos = st.file_uploader(
-        label="Selecione um ou mais arquivos",
-        type=["xlsx", "csv", "pdf", "pptx"],
-        accept_multiple_files=True,
-        help="Cada arquivo será processado pelo parser correspondente à extensão.",
+    """Renderiza a área de arrastar arquivos e gerencia o pipeline de parsing/bulk insert."""
+    st.header("📂 Upload Multifonte")
+    st.markdown(
+        "Suporta arquivos desestruturados ou tabulares: **Excel (.xlsx), CSV, PDF e PowerPoint (.pptx)**. "
+        "O sistema irá aplicar as estratégias em cascata automaticamente."
     )
 
-    if not arquivos:
+    arquivos_enviados = st.file_uploader(
+        "Selecione um ou mais arquivos para processamento",
+        type=["xlsx", "xls", "csv", "pdf", "pptx"],
+        accept_multiple_files=True,
+    )
+
+    if not arquivos_enviados:
+        st.info("Aguardando upload de arquivos para iniciar o motor de parsing.")
         return
 
-    for arquivo in arquivos:
-        with st.expander(f"📄 {arquivo.name}", expanded=True):
-            try:
-                df_extraido, origem = processar_arquivo(arquivo)
+    st.subheader("⚙️ Status do Processamento em Lote")
 
-                if df_extraido.empty:
-                    st.warning(
-                        f"⚠️ Nenhum dado estruturado encontrado em **{arquivo.name}**. "
-                        "Verifique se o arquivo contém as colunas: data, categoria, valor."
-                    )
+    for arquivo in arquivos_enviados:
+        with st.expander(f"📄 Arquivo: {arquivo.name}", expanded=True):
+            try:
+                # 1. Aciona o dispatcher estratégico em parsers.py
+                df_processado, tipo_origem = processar_arquivo(arquivo)
+
+                if df_processado.empty:
+                    st.warning("O arquivo foi lido, mas nenhuma linha válida foi estruturada pelo motor.")
                     continue
 
-                # Preview dos dados extraídos
-                st.write(f"**{len(df_extraido)} registros detectados — pré-visualização:**")
-                st.dataframe(
-                    df_extraido.head(10),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.markdown(f"**Estratégia aplicada:** Ingestor nativo para `{tipo_origem.upper()}`")
+                st.dataframe(df_processado.head(5), use_container_width=True)
 
-                col_confirm, col_cancel = st.columns([1, 3])
-                confirmar = col_confirm.button(
-                    "✅ Importar dados",
-                    key=f"confirm_{arquivo.name}",
-                    type="primary",
-                )
+                # Colunas para ações de confirmação
+                col_info, col_acao = st.columns([3, 1])
+                col_info.caption(f"Total de linhas identificadas para ingestão: {len(df_processado)}")
 
-                if confirmar:
-                    salvos = salvar_dataframe(df_extraido, origem=origem)
-                    _recarregar_dados()
-                    st.success(
-                        f"✅ **{salvos}/{len(df_extraido)}** registros importados de *{arquivo.name}*."
-                    )
+                # Botão único por arquivo para disparar o Bulk Insert seguro
+                if col_acao.button("Confirmar Carga no Banco", key=f"btn_{arquivo.name}"):
+                    with st.spinner("Persistindo lote de dados de forma atômica..."):
+                        # Chamada da nova função vetorizada e otimizada
+                        linhas_salvas = salvar_dataframe_otimizado(df_processado, origem=tipo_origem)
 
-            except ValueError as exc:
-                # Extensão não suportada
-                st.error(
-                    f"❌ **Formato não suportado:** {exc}\n\n"
-                    "Use apenas: `.xlsx`, `.csv`, `.pdf`, `.pptx`."
-                )
+                    if linhas_salvas > 0:
+                        st.success(f"Sucesso! {linhas_salvas} registros foram gravados em lote.")
+                        _atualizar_dados_sessao()
+                    else:
+                        st.error("A carga falhou. Verifique se o formato dos campos está correto nos logs.")
+
             except Exception as exc:
-                logger.error("Erro inesperado ao processar '%s': %s", arquivo.name, exc)
-                st.error(
-                    f"❌ **Erro ao processar `{arquivo.name}`:**\n\n"
-                    f"```\n{type(exc).__name__}: {exc}\n```\n\n"
-                    "Verifique os logs para mais detalhes."
-                )
+                logger.error(f"Falha de processamento no arquivo {arquivo.name}: {exc}", exc_info=True)
+                st.error(f"Erro ao processar arquivo: {type(exc).__name__} - {str(exc)}")
 
 
 # ---------------------------------------------------------------------------
-# Área central — KPIs e visualizações
+# Aba 2: Exibição de Dados (Tabelas)
 # ---------------------------------------------------------------------------
-def _render_metricas(df: pd.DataFrame) -> None:
-    """
-    Renderiza as métricas financeiras globais e os gráficos por categoria.
+def _render_dados(df: pd.DataFrame) -> None:
+    """Exibe os dados históricos do banco com filtros interativos em tempo real."""
+    st.header("🗃️ Registro Histórico Unificado")
 
-    Args:
-        df: DataFrame com todos os registros históricos.
-    """
     if df.empty:
-        st.info("📭 Nenhum dado registrado ainda. Use a inserção manual ou o upload de arquivos.")
+        st.info("Nenhum dado encontrado no banco de dados. Use a barra lateral ou faça um upload.")
         return
 
-    st.subheader("📊 Visão Geral Financeira")
-
-    # --- KPIs globais ---
-    total_gasto = df["valor"].sum()
-    maior_gasto = df["valor"].max()
-    media_gasto = df["valor"].mean()
-    total_registros = len(df)
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("💰 Total Gasto", f"R$ {total_gasto:,.2f}")
-    col2.metric("📈 Maior Despesa", f"R$ {maior_gasto:,.2f}")
-    col3.metric("📉 Média por Registro", f"R$ {media_gasto:,.2f}")
-    col4.metric("🗂️ Total de Registros", total_registros)
-
-    st.divider()
-
-    # --- Totalizadores por categoria ---
-    st.subheader("📂 Totais por Categoria")
-    df_cat = (
-        df.groupby("categoria", as_index=False)["valor"]
-        .sum()
-        .sort_values("valor", ascending=False)
-    )
-
-    # Métricas em linha
-    cols = st.columns(len(df_cat))
-    for col, (_, row) in zip(cols, df_cat.iterrows()):
-        col.metric(row["categoria"], f"R$ {row['valor']:,.2f}")
-
-    # Gráfico de barras por categoria
-    fig_bar = px.bar(
-        df_cat,
-        x="categoria",
-        y="valor",
-        color="categoria",
-        text_auto=".2f",
-        title="Distribuição de Gastos por Categoria",
-        labels={"valor": "Valor (R$)", "categoria": "Categoria"},
-        color_discrete_sequence=px.colors.qualitative.Set2,
-    )
-    fig_bar.update_layout(showlegend=False, plot_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig_bar, use_container_width=True)
-
-    st.divider()
-
-    # --- Evolução temporal ---
-    st.subheader("📅 Evolução Temporal")
-    df_tempo = df.copy()
-    df_tempo["data"] = pd.to_datetime(df_tempo["data"], errors="coerce")
-    df_tempo = df_tempo.dropna(subset=["data"])
-
-    if not df_tempo.empty:
-        df_mes = (
-            df_tempo.groupby([pd.Grouper(key="data", freq="ME"), "categoria"], as_index=False)["valor"]
-            .sum()
-        )
-        df_mes["data"] = df_mes["data"].dt.strftime("%Y-%m")
-        fig_line = px.line(
-            df_mes,
-            x="data",
-            y="valor",
-            color="categoria",
-            markers=True,
-            title="Gastos Mensais por Categoria",
-            labels={"valor": "Valor (R$)", "data": "Mês"},
-            color_discrete_sequence=px.colors.qualitative.Set2,
-        )
-        fig_line.update_layout(plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_line, use_container_width=True)
-
-
-# ---------------------------------------------------------------------------
-# Área central — Tabela de dados brutos
-# ---------------------------------------------------------------------------
-def _render_tabela(df: pd.DataFrame) -> None:
-    """
-    Exibe a tabela completa de registros com filtro por categoria.
-
-    Args:
-        df: DataFrame com todos os registros históricos.
-    """
-    if df.empty:
-        return
-
-    st.subheader("🗃️ Dados Brutos")
-
+    # Filtro dinâmico por categoria na interface
     categorias_disponiveis = ["Todas"] + sorted(df["categoria"].unique().tolist())
-    filtro_cat = st.selectbox("Filtrar por categoria:", categorias_disponiveis)
+    filtro_cat = st.selectbox("Filtrar visualização por Categoria:", categorias_disponiveis)
 
     df_filtrado = df if filtro_cat == "Todas" else df[df["categoria"] == filtro_cat]
 
@@ -296,33 +182,92 @@ def _render_tabela(df: pd.DataFrame) -> None:
             "Data": st.column_config.DateColumn(format="DD/MM/YYYY"),
         },
     )
-    st.caption(f"Exibindo {len(df_filtrado)} de {len(df)} registros.")
+    st.caption(f"Exibindo {len(df_filtrado)} de {len(df)} registros encontrados no SQLite.")
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Aba 3: Inteligência de Negócio (Gráficos e KPIs)
+# ---------------------------------------------------------------------------
+def _render_analise(df: pd.DataFrame) -> None:
+    """Gera blocos de métricas e gráficos analíticos interativos usando Plotly."""
+    st.header("📊 Métricas Consolidadas")
+
+    if df.empty:
+        st.info("Insira dados para habilitar os painéis de inteligência gráfica.")
+        return
+
+    # 1. Cálculo de cartões de KPI básicos
+    total_gasto = df["valor"].sum()
+    total_registros = len(df)
+    media_gasto = df["valor"].mean()
+    maior_gasto = df["valor"].max()
+
+    kpi_tot, kpi_qtd, kpi_med, kpi_max = st.columns(4)
+    kpi_tot.metric("Gasto Acumulado Total", f"R$ {total_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    kpi_qtd.metric("Volume de Registros", f"{total_registros} itens")
+    kpi_med.metric("Ticket Médio por Linha", f"R$ {media_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    kpi_max.metric("Maior Despesa Isolada", f"R$ {maior_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    st.markdown("---")
+
+    # 2. Geração de Gráficos de Distribuição
+    graf_col1, graf_col2 = st.columns(2)
+
+    with graf_col1:
+        st.subheader("Despesas por Categoria")
+        df_cat = df.groupby("categoria", as_index=False)["valor"].sum()
+        fig_pizza = px.pie(
+            df_cat,
+            names="categoria",
+            values="valor",
+            hole=0.4,
+            color_discrete_sequence=px.colors.qualitative.Safe,
+        )
+        fig_pizza.update_traces(textinfo="percent+label")
+        st.plotly_chart(fig_pizza, use_container_width=True)
+
+    with graf_col2:
+        st.subheader("Evolução Cronológica dos Gastos")
+        # Agrupa por data para montar o gráfico de linha de tendência temporal
+        df_tempo = df.groupby("data", as_index=False)["valor"].sum().sort_values("data")
+        fig_linha = px.line(
+            df_tempo,
+            x="data",
+            y="valor",
+            labels={"data": "Linha do Tempo", "valor": "Montante Diário (R$)"},
+            markers=True,
+            color_discrete_sequence=["#2E7D32"],
+        )
+        st.plotly_chart(fig_linha, use_container_width=True)
+
+
+# ---------------------------------------------------------------------------
+# Entry point da aplicação
 # ---------------------------------------------------------------------------
 def main() -> None:
-    """Ponto de entrada principal do aplicativo Streamlit."""
+    """Ponto de entrada principal da arquitetura do aplicativo Streamlit."""
     _init_session()
 
     st.title("💰 Dashboard de Ingestão Multifonte & Persistência")
-    st.caption("Dados financeiros unificados · Persistência em SQLite · Deploy Hugging Face Spaces")
+    st.caption("Pipeline de Dados Unificado · Persistência Segura SQLite · Otimização em Lote")
 
+    # Renderiza o painel de gravação manual à esquerda
     _render_sidebar()
 
-    tab_upload, tab_dados, tab_analise = st.tabs(["📂 Upload", "🗃️ Dados", "📊 Análise"])
+    # Cria as abas de navegação da interface de usuário
+    tab_upload, tab_dados, tab_analise = st.tabs(["📂 Upload de Arquivos", "🗃️ Dados Cadastrados", "📊 Análise de Performance"])
+
+    # Captura o estado atualizado da memória para distribuir nas views
+    df_atual = st.session_state.db_financeiro
 
     with tab_upload:
         _render_upload()
 
-    df_atual = st.session_state.db_financeiro
-
     with tab_dados:
-        _render_tabela(df_atual)
+        _render_dados(df_atual)
 
     with tab_analise:
-        _render_metricas(df_atual)
+        _render_analise(df_atual)
 
 
 if __name__ == "__main__":
