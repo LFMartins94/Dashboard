@@ -55,38 +55,38 @@ def _get_connection(db_path: str = DB_PATH):
     """
     conn = sqlite3.connect(db_path, timeout=5.0)
     
-    # Hardening: Ativa o modo WAL (Write-Ahead Logging) para permitir que leituras
-    # aconteçam simultaneamente com as escritas, minimizando concorrência travada.
+    # Hardening: Ativa o modo WAL (Write-Ahead Logging) para melhorar concorrência
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
     except sqlite3.Error:
         pass
         
-    retries = 0
-    while retries < MAX_RETRIES:
-        try:
-            yield conn
-            conn.commit()
-            break
-        except sqlite3.OperationalError as exc:
-            if "database is locked" in str(exc).lower():
-                retries += 1
-                logger.warning(
-                    "Banco travado. Tentativa %d/%d aguardando %.2fs...",
-                    retries, MAX_RETRIES, RETRY_DELAY
-                )
-                time.sleep(RETRY_DELAY)
-            else:
+    try:
+        retries = 0
+        while retries < MAX_RETRIES:
+            try:
+                yield conn
+                conn.commit()
+                break
+            except sqlite3.OperationalError as exc:
+                if "database is locked" in str(exc).lower():
+                    retries += 1
+                    logger.warning(
+                        "Banco travado. Tentativa %d/%d aguardando %.2fs...",
+                        retries, MAX_RETRIES, RETRY_DELAY
+                    )
+                    time.sleep(RETRY_DELAY)
+                else:
+                    conn.rollback()
+                    raise exc
+            except Exception as exc:
                 conn.rollback()
                 raise exc
-        except Exception as exc:
+        else:
             conn.rollback()
-            raise exc
-    else:
-        conn.rollback()
-        raise sqlite3.OperationalError(
-            f"Falha ao adquirir trava no banco após {MAX_RETRIES} tentativas."
-        )
+            raise sqlite3.OperationalError(
+                f"Falha ao adquirir trava no banco após {MAX_RETRIES} tentativas."
+            )
     finally:
         conn.close()
 
@@ -102,7 +102,6 @@ def inicializar_banco(db_path: str = DB_PATH) -> None:
     try:
         with _get_connection(db_path) as conn:
             conn.execute(DDL_GASTOS)
-            # Cria índices para otimizar queries de agregações (KPIs e Gráficos)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_data ON gastos(data);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria);")
         logger.info("Banco de dados inicializado com sucesso em '%s'.", db_path)
@@ -151,11 +150,10 @@ def _normalizar_valor(v) -> float:
 def salvar_registro(data_val, categoria: str, valor_val, origem: str = "manual", db_path: str = DB_PATH) -> bool:
     """
     Salva um único registro no banco utilizando consultas parametrizadas (Anti-SQLi).
-    Ideal para digitação manual direta no painel.
     """
     data_str = _normalizar_data(data_val)
     valor = _normalizar_valor(valor_val)
-    categoria_clean = str(categoria).strip()[:100]  # Hardening: Limitação preventiva de tamanho
+    categoria_clean = str(categoria).strip()[:100]
 
     if data_str == SENTINEL or not categoria_clean:
         logger.warning("Registro manual ignorado devido a campos obrigatórios inválidos.")
@@ -174,10 +172,7 @@ def salvar_registro(data_val, categoria: str, valor_val, origem: str = "manual",
 def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_path: str = DB_PATH) -> int:
     """
     Refatoração de Alta Performance (Bulk Insert).
-    Recebe um DataFrame completo oriundo de parsers, limpa, padroniza,
-    valida e persiste os dados em lote único usando executemany dentro de uma transação.
-    
-    Substitui loops imperativos por escrita vetorizada atômica extremamente veloz.
+    Persiste os dados em lote único usando executemany dentro de uma transação.
     """
     if df.empty:
         return 0
@@ -188,14 +183,10 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_pat
             logger.error("Coluna obrigatória ausente no DataFrame enviado: %s", col)
             return 0
 
-    # Cópia defensiva para evitar o erro 'SettingWithCopyWarning' do pandas
     df_clean = df.copy()
-    
-    # Aplicação vetorizada de limpeza
     df_clean["data_norm"] = df_clean["data"].apply(_normalizar_data)
     df_clean["valor_norm"] = df_clean["valor"].apply(_normalizar_valor)
     
-    # Filtro de segurança: ignora registros que não puderam ser recuperados pelos parsers
     df_filtrado = df_clean[
         (df_clean["data_norm"] != SENTINEL) & 
         (df_clean["categoria"].notna()) & 
@@ -207,11 +198,10 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_pat
         logger.warning("Nenhum registro válido restou após a higienização do DataFrame.")
         return 0
 
-    # Converte eficientemente as linhas do DataFrame para tuplas padrão do Python
     registros_para_banco = [
         (
             str(row["data_norm"]),
-            str(row["categoria"]).strip()[:100],  # Hardening: Prevenção contra estouro de string
+            str(row["categoria"]).strip()[:100],
             float(row["valor_norm"]),
             str(origem)
         )
@@ -223,10 +213,9 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_pat
     try:
         with _get_connection(db_path) as conn:
             cursor = conn.cursor()
-            # Executa o Bulk Insert atômico em lote
             cursor.executemany(sql, registros_para_banco)
             salvos = cursor.rowcount
-        logger.info("Bulk Insert concluído: %d/%d registros salvos com sucesso (origem=%s).", salvos, len(df), origem)
+        logger.info("Bulk Insert concluído: %d/%d registros salvos com sucesso.", salvos, len(df))
         return salvos
     except sqlite3.Error as exc:
         logger.error("Falha crítica na transação em lote (Bulk Insert): %s", exc)
@@ -239,7 +228,6 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_pat
 def carregar_todos_os_gastos(db_path: str = DB_PATH) -> pd.DataFrame:
     """
     Retorna todos os registros da tabela `gastos` como um DataFrame do Pandas.
-    Garante conversões tipadas corretas para o ecossistema Streamlit/Plotly.
     """
     sql = "SELECT id, data, categoria, valor, origem, criado_em FROM gastos ORDER BY data DESC, id DESC"
     try:
@@ -247,11 +235,9 @@ def carregar_todos_os_gastos(db_path: str = DB_PATH) -> pd.DataFrame:
             df = pd.read_sql_query(sql, conn)
         
         if not df.empty:
-            # Converte a coluna de texto para objetos nativos de data do Python
             df["data"] = pd.to_datetime(df["data"], errors="coerce").dt.date
             df["valor"] = df["valor"].round(2)
         else:
-            # Retorna DataFrame vazio tipado caso o banco acabe de ser criado
             return pd.DataFrame(columns=["id", "data", "categoria", "valor", "origem", "criado_em"])
             
         return df
