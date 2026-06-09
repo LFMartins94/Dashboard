@@ -1,18 +1,16 @@
 """
-database.py
-===========
-Módulo de persistência SQLite para o Dashboard Financeiro.
-Gerencia criação do schema, leitura e escrita de registros financeiros.
+database.py (Versão PostgreSQL Otimizada)
+=========================================
+Módulo de persistência em nuvem utilizando SQLAlchemy e PostgreSQL.
+Focado em alta performance (Bulk Insert) e segurança para dados contábeis.
 """
 
-import sqlite3
-import time
+import os
 import logging
-from contextlib import contextmanager
 from datetime import date, datetime
-from typing import Optional
-
 import pandas as pd
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------
 # Configuração de logging
@@ -24,116 +22,61 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Constantes
+# Gerenciamento Seguro de Conexão (Hardening via Environment Variables)
 # ---------------------------------------------------------------------------
-DB_PATH: str = "financeiro.db"
-MAX_RETRIES: int = 5
-RETRY_DELAY: float = 0.3  # segundos entre tentativas
+# Em desenvolvimento local, ele usará o SQLite como fallback. 
+# Na nuvem, você preencherá a variável DATABASE_URL com o link do seu Postgres.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///financeiro.db")
+
+# O pool_size e max_overflow controlam a concorrência para não estourar o plano gratuito
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True  # Testa se a conexão caiu antes de usá-la (Resiliência)
+)
+
 SENTINEL: str = "NÃO ENCONTRADO"
 
-# Schema da tabela principal
-DDL_GASTOS: str = """
+# Schema adaptado para PostgreSQL (com tipos de dados nativos mais eficientes)
+DDL_GASTOS_POSTGRES = """
 CREATE TABLE IF NOT EXISTS gastos (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    data        TEXT    NOT NULL,
-    categoria   TEXT    NOT NULL,
-    valor       REAL    NOT NULL,
-    origem      TEXT    NOT NULL DEFAULT 'manual',
-    criado_em   TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+    id          SERIAL PRIMARY KEY,
+    data        DATE NOT NULL,
+    categoria   VARCHAR(100) NOT NULL,
+    valor       NUMERIC(12, 2) NOT NULL,
+    origem      VARCHAR(50) NOT NULL DEFAULT 'manual',
+    criado_em   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_gastos_data ON gastos(data);
+CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria);
 """
-
-
-# ---------------------------------------------------------------------------
-# Context manager com retry para concorrência de escrita
-# ---------------------------------------------------------------------------
-@contextmanager
-def _get_connection(db_path: str = DB_PATH):
-    """
-    Gerenciador de contexto que fornece uma conexão SQLite com política de retry
-    para mitigar erros de travamento por concorrência (SQLITE_BUSY).
-    """
-    conn = sqlite3.connect(db_path, timeout=5.0)
-    
-    # Hardening: Ativa o modo WAL (Write-Ahead Logging) para melhorar concorrência
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-    except sqlite3.Error:
-        pass
-        
-    try:
-        retries = 0
-        while retries < MAX_RETRIES:
-            try:
-                yield conn
-                conn.commit()
-                break
-            except sqlite3.OperationalError as exc:
-                if "database is locked" in str(exc).lower():
-                    retries += 1
-                    logger.warning(
-                        "Banco travado. Tentativa %d/%d aguardando %.2fs...",
-                        retries, MAX_RETRIES, RETRY_DELAY
-                    )
-                    time.sleep(RETRY_DELAY)
-                else:
-                    conn.rollback()
-                    raise exc
-            except Exception as exc:
-                conn.rollback()
-                raise exc
-        else:
-            conn.rollback()
-            raise sqlite3.OperationalError(
-                f"Falha ao adquirir trava no banco após {MAX_RETRIES} tentativas."
-            )
-    finally:
-        conn.close()
-
 
 # ---------------------------------------------------------------------------
 # Inicialização do Banco
 # ---------------------------------------------------------------------------
-def inicializar_banco(db_path: str = DB_PATH) -> None:
-    """
-    Cria o arquivo de banco de dados e executa o DDL para garantir
-    a existência da tabela gastos com os índices necessários.
-    """
+def inicializar_banco() -> None:
+    """Garante que a tabela e os índices existam no PostgreSQL remoto."""
     try:
-        with _get_connection(db_path) as conn:
-            conn.execute(DDL_GASTOS)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_data ON gastos(data);")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria);")
-        logger.info("Banco de dados inicializado com sucesso em '%s'.", db_path)
-    except Exception as exc:
-        logger.critical("Falha crítica ao inicializar o banco de dados: %s", exc)
+        with engine.begin() as conn:
+            conn.execute(text(DDL_GASTOS_POSTGRES))
+        logger.info("Banco de dados PostgreSQL/SQLAlchemy inicializado com sucesso.")
+    except SQLAlchemyError as exc:
+        logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
         raise exc
 
-
 # ---------------------------------------------------------------------------
-# Funções Auxiliares de Normalização e Sanitização (Hardening)
+# Funções Auxiliares de Normalização
 # ---------------------------------------------------------------------------
-def _normalizar_data(d) -> str:
-    """Normaliza diferentes tipos de entrada de data para string no padrão YYYY-MM-DD."""
+def _normalizar_data(d):
     if pd.isna(d) or d == SENTINEL:
-        return SENTINEL
-    if isinstance(d, (date, datetime)):
-        return d.strftime("%Y-%m-%d")
-    if isinstance(d, pd.Timestamp):
-        return d.strftime("%Y-%m-%d")
-    
-    d_str = str(d).strip()
+        return None
     try:
-        parsed_dt = pd.to_datetime(d_str, errors="coerce")
-        if pd.notna(parsed_dt):
-            return parsed_dt.strftime("%Y-%m-%d")
+        return pd.to_datetime(d).date()
     except Exception:
-        pass
-    return d_str if d_str else SENTINEL
-
+        return None
 
 def _normalizar_valor(v) -> float:
-    """Normaliza valores financeiros garantindo precisão numérica de 2 casas decimais."""
     if pd.isna(v) or v == SENTINEL:
         return 0.0
     try:
@@ -143,36 +86,32 @@ def _normalizar_valor(v) -> float:
     except (ValueError, TypeError):
         return 0.0
 
-
 # ---------------------------------------------------------------------------
-# Operações de Escrita
+# Operações de Escrita (Alta Performance Contábil)
 # ---------------------------------------------------------------------------
-def salvar_registro(data_val, categoria: str, valor_val, origem: str = "manual", db_path: str = DB_PATH) -> bool:
-    """
-    Salva um único registro no banco utilizando consultas parametrizadas (Anti-SQLi).
-    """
-    data_str = _normalizar_data(data_val)
-    valor = _normalizar_valor(valor_val)
+def salvar_registro(data_val, categoria: str, valor_val, origem: str = "manual") -> bool:
+    """Salva um único registro manual de forma parametrizada (Anti-SQLi)."""
+    data_clean = _normalizar_data(data_val)
+    valor_clean = _normalizar_valor(valor_val)
     categoria_clean = str(categoria).strip()[:100]
 
-    if data_str == SENTINEL or not categoria_clean:
-        logger.warning("Registro manual ignorado devido a campos obrigatórios inválidos.")
+    if not data_clean or not categoria_clean:
         return False
 
-    sql = "INSERT INTO gastos (data, categoria, valor, origem) VALUES (?, ?, ?, ?)"
+    sql = text("INSERT INTO gastos (data, categoria, valor, origem) VALUES (:data, :categoria, :valor, :origem)")
     try:
-        with _get_connection(db_path) as conn:
-            conn.execute(sql, (data_str, categoria_clean, valor, str(origem)))
+        with engine.begin() as conn:
+            conn.execute(sql, {"data": data_clean, "categoria": categoria_clean, "valor": valor_clean, "origem": origem})
         return True
-    except Exception as exc:
-        logger.error("Erro ao salvar registro individual: %s", exc)
+    except SQLAlchemyError as exc:
+        logger.error(f"Erro ao salvar registro individual: {exc}")
         return False
 
-
-def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_path: str = DB_PATH) -> int:
+def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo") -> int:
     """
-    Refatoração de Alta Performance (Bulk Insert).
-    Persiste os dados em lote único usando executemany dentro de uma transação.
+    BULK INSERT CONTÁBIL DE ALTA PERFORMANCE.
+    Utiliza o método nativo altamente otimizado do Pandas acoplado ao SQLAlchemy
+    para empurrar milhares de linhas de reconciliação de uma vez só para o Postgres.
     """
     if df.empty:
         return 0
@@ -180,67 +119,57 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo", db_pat
     colunas_obrigatorias = ["data", "categoria", "valor"]
     for col in colunas_obrigatorias:
         if col not in df.columns:
-            logger.error("Coluna obrigatória ausente no DataFrame enviado: %s", col)
+            logger.error(f"Coluna obrigatória ausente: {col}")
             return 0
 
+    # Preparação veloz dos dados
     df_clean = df.copy()
-    df_clean["data_norm"] = df_clean["data"].apply(_normalizar_data)
-    df_clean["valor_norm"] = df_clean["valor"].apply(_normalizar_valor)
-    
-    df_filtrado = df_clean[
-        (df_clean["data_norm"] != SENTINEL) & 
-        (df_clean["categoria"].notna()) & 
-        (df_clean["categoria"] != "") &
-        (df_clean["categoria"] != SENTINEL)
-    ]
+    df_clean["data"] = df_clean["data"].apply(_normalizar_data)
+    df_clean["valor"] = df_clean["valor"].apply(_normalizar_valor)
+    df_clean["categoria"] = df_clean["categoria"].astype(str).str.strip().str[:100]
+    df_clean["origem"] = str(origem)
+
+    # Remove registros inválidos antes de enviar à nuvem para poupar banda e processamento
+    df_filtrado = df_clean[df_clean["data"].notna() & (df_clean["categoria"] != "")]
     
     if df_filtrado.empty:
-        logger.warning("Nenhum registro válido restou após a higienização do DataFrame.")
         return 0
 
-    registros_para_banco = [
-        (
-            str(row["data_norm"]),
-            str(row["categoria"]).strip()[:100],
-            float(row["valor_norm"]),
-            str(origem)
-        )
-        for _, row in df_filtrado.iterrows()
-    ]
+    # Seleciona apenas as colunas que batem com o banco de dados
+    df_final = df_filtrado[["data", "categoria", "valor", "origem"]]
 
-    sql = "INSERT INTO gastos (data, categoria, valor, origem) VALUES (?, ?, ?, ?)"
-    
     try:
-        with _get_connection(db_path) as conn:
-            cursor = conn.cursor()
-            cursor.executemany(sql, registros_para_banco)
-            salvos = cursor.rowcount
-        logger.info("Bulk Insert concluído: %d/%d registros salvos com sucesso.", salvos, len(df))
-        return salvos
-    except sqlite3.Error as exc:
-        logger.error("Falha crítica na transação em lote (Bulk Insert): %s", exc)
+        # O 'to_sql' com a engine do SQLAlchemy realiza a inserção em blocos na nuvem de forma atômica
+        with engine.begin() as conn:
+            df_final.to_sql(
+                name="gastos",
+                con=conn,
+                if_exists="append",
+                index=False,
+                method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
+                chunksize=1000  # Envia de 1000 em 1000 linhas por bloco
+            )
+        return len(df_final)
+    except SQLAlchemyError as exc:
+        logger.error(f"Falha crítica no Bulk Insert contábil: {exc}")
         return 0
-
 
 # ---------------------------------------------------------------------------
 # Operações de Leitura
 # ---------------------------------------------------------------------------
-def carregar_todos_os_gastos(db_path: str = DB_PATH) -> pd.DataFrame:
-    """
-    Retorna todos os registros da tabela `gastos` como um DataFrame do Pandas.
-    """
-    sql = "SELECT id, data, categoria, valor, origem, criado_em FROM gastos ORDER BY data DESC, id DESC"
+def carregar_todos_os_gastos() -> pd.DataFrame:
+    """Carrega todo o histórico contábil do PostgreSQL para análise no Streamlit."""
+    sql = text("SELECT id, data, categoria, valor, origem, criado_em FROM gastos ORDER BY data DESC, id DESC")
     try:
-        with _get_connection(db_path) as conn:
+        with engine.connect() as conn:
             df = pd.read_sql_query(sql, conn)
         
         if not df.empty:
-            df["data"] = pd.to_datetime(df["data"], errors="coerce").dt.date
-            df["valor"] = df["valor"].round(2)
+            df["data"] = pd.to_datetime(df["data"]).dt.date
+            df["valor"] = df["valor"].astype(float).round(2)
         else:
             return pd.DataFrame(columns=["id", "data", "categoria", "valor", "origem", "criado_em"])
-            
         return df
-    except Exception as exc:
-        logger.error("Falha ao carregar dados do banco de dados: %s", exc)
+    except SQLAlchemyError as exc:
+        logger.error(f"Falha ao carregar dados do PostgreSQL: {exc}")
         return pd.DataFrame(columns=["id", "data", "categoria", "valor", "origem", "criado_em"])
