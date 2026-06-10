@@ -28,13 +28,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Fallback: usa a connection string do Supabase caso a variável de ambiente não esteja definida
 if not DATABASE_URL:
+    logger.warning("Variável de ambiente DATABASE_URL não encontrada. Usando string de conexão de fallback (Supabase).")
     DATABASE_URL = "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:5432/postgres"
 
 # Correção automática de dialeto exigida pelo SQLAlchemy moderno
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O POOLER DO SUPABASE (PORTA 6543)
+# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O SUPABASE (PORTA 5432)
 # - pool_size e max_overflow: controlam a concorrência dentro do limite do plano.
 # - pool_recycle: Fecha conexões ociosas a cada 30 min, evitando a queda do pooler.
 # - pool_pre_ping: Garante resiliência testando a conexão antes de executar o SQL.

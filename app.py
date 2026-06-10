@@ -6,7 +6,7 @@ Combina inserção manual, upload de arquivos e visualização de KPIs financeir
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 import plotly.express as px
@@ -18,7 +18,7 @@ from database import (
     salvar_dataframe_otimizado,  # Atualizado para a versão em lote refatorada
     salvar_registro,
 )
-from parsers import processar_arquivo
+from parsers import processar_arquivo, extrair_dados_comprovante_imagem
 
 # ---------------------------------------------------------------------------
 # Configuração global
@@ -65,6 +65,26 @@ def _render_sidebar() -> None:
     with st.sidebar:
         st.header("📝 Lançamento Manual")
         st.markdown("Insira despesas avulsas diretamente na base de dados.")
+        
+        st.divider()
+        st.subheader("🎨 Tema Visual")
+        tema = st.radio("Escolha o tema:", ["🌙 Escuro", "☀️ Claro"], horizontal=True)
+        if tema == "☀️ Claro":
+            st.markdown("""
+                <style>
+                [data-testid="stAppViewContainer"] { background-color: #FFFFFF; color: #000000; }
+                [data-testid="stSidebar"] { background-color: #F0F2F6; }
+                </style>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <style>
+                [data-testid="stAppViewContainer"] { background-color: #0E1117; color: #FAFAFA; }
+                [data-testid="stSidebar"] { background-color: #262730; }
+                </style>
+            """, unsafe_allow_html=True)
+        
+        st.divider()
 
         with st.form("form_registro_manual", clear_on_submit=True):
             campo_data = st.date_input("Data do Gasto", value=date.today())
@@ -147,6 +167,74 @@ def _render_upload() -> None:
             except Exception as exc:
                 logger.error(f"Falha de processamento no arquivo {arquivo.name}: {exc}", exc_info=True)
                 st.error(f"Erro ao processar arquivo: {type(exc).__name__} - {str(exc)}")
+
+
+# ---------------------------------------------------------------------------
+# Aba 1.5: Comprovante por Foto (OCR)
+# ---------------------------------------------------------------------------
+def _render_comprovante_foto() -> None:
+    """Renderiza a interface para upload ou captura de foto de comprovante usando OCR."""
+    st.header("📷 Leitura de Comprovante (IA)")
+    st.markdown("Envie ou tire uma foto do seu comprovante fiscal para extração automática de dados contábeis.")
+
+    opcao = st.radio("Como deseja enviar o comprovante?", ["Fazer Upload de Arquivo", "Tirar Foto na Hora"], horizontal=True)
+    imagem_bytes = None
+
+    if opcao == "Fazer Upload de Arquivo":
+        arquivo = st.file_uploader("Selecione a imagem do comprovante", type=["png", "jpg", "jpeg"])
+        if arquivo:
+            imagem_bytes = arquivo.read()
+            st.image(imagem_bytes, caption="Pré-visualização do Comprovante", width=350)
+    else:
+        foto = st.camera_input("Tire uma foto do comprovante usando a câmera")
+        if foto:
+            imagem_bytes = foto.read()
+
+    if imagem_bytes:
+        if st.button("Escanear Comprovante com IA", type="primary"):
+            with st.spinner("Processando imagem via OCR (pode levar alguns segundos)..."):
+                resultado = extrair_dados_comprovante_imagem(imagem_bytes)
+            
+            if resultado:
+                st.success("Leitura concluída! Revise os dados abaixo antes de salvar.")
+                
+                with st.form("form_comprovante_ocr", clear_on_submit=True):
+                    try:
+                        data_padrao = datetime.strptime(resultado.get("data", ""), "%Y-%m-%d").date() if resultado.get("data") else date.today()
+                    except ValueError:
+                        try:
+                            data_padrao = datetime.strptime(resultado.get("data", ""), "%d/%m/%Y").date() if resultado.get("data") else date.today()
+                        except ValueError:
+                            data_padrao = date.today()
+
+                    campo_data = st.date_input("Data do Gasto", value=data_padrao)
+                    
+                    valor_ext = resultado.get("valor") or 0.0
+                    campo_valor = st.number_input("Valor Total (R$)", min_value=0.0, value=float(valor_ext), step=10.0, format="%.2f")
+                    
+                    hora_ext = resultado.get("hora") or ""
+                    if hora_ext:
+                        st.info(f"Hora identificada no comprovante: {hora_ext}")
+
+                    st.text_area("Texto Bruto Extraído (Referência OCR)", value=resultado.get("texto_extraido", ""), disabled=True, height=100)
+                    
+                    if st.form_submit_button("Confirmar e Salvar no Banco"):
+                        if campo_valor <= 0:
+                            st.error("O valor do gasto deve ser maior que R$ 0,00.")
+                        else:
+                            sucesso = salvar_registro(
+                                data_val=campo_data,
+                                categoria="Comprovante (OCR Foto)",
+                                valor_val=campo_valor,
+                                origem="ocr_camera"
+                            )
+                            if sucesso:
+                                st.success("Comprovante salvo com sucesso!")
+                                _atualizar_dados_sessao()
+                            else:
+                                st.error("Erro crítico ao gravar no banco de dados.")
+            else:
+                st.warning("A IA não conseguiu identificar os dados financeiros. Tente uma foto mais nítida.")
 
 
 # ---------------------------------------------------------------------------
@@ -255,13 +343,21 @@ def main() -> None:
     _render_sidebar()
 
     # Cria as abas de navegação da interface de usuário
-    tab_upload, tab_dados, tab_analise = st.tabs(["📂 Upload de Arquivos", "🗃️ Dados Cadastrados", "📊 Análise de Performance"])
+    tab_upload, tab_foto, tab_dados, tab_analise = st.tabs([
+        "📂 Upload em Lote", 
+        "📷 Comprovante (Foto)", 
+        "🗃️ Dados Cadastrados", 
+        "📊 Análise de Performance"
+    ])
 
     # Captura o estado atualizado da memória para distribuir nas views
     df_atual = st.session_state.db_financeiro
 
     with tab_upload:
         _render_upload()
+
+    with tab_foto:
+        _render_comprovante_foto()
 
     with tab_dados:
         _render_dados(df_atual)

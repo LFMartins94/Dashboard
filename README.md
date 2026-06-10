@@ -1,17 +1,6 @@
----
-title: Dashboard Financeiro Multifonte
-emoji: 💰
-colorFrom: green
-colorTo: blue
-sdk: streamlit
-sdk_version: "1.35.0"
-app_file: app.py
-pinned: false
----
-
 # 💰 Dashboard de Ingestão Multifonte & Persistência
 
-Dashboard financeiro unificado que ingere dados de múltiplas fontes (digitação manual, Excel, CSV, PDF e PowerPoint), persiste tudo em SQLite local e exibe análises interativas.
+Dashboard financeiro unificado que ingere dados de múltiplas fontes (digitação manual, comprovantes por foto/câmera, Excel, CSV, PDF e PowerPoint), persiste tudo em PostgreSQL (Supabase) e exibe análises interativas.
 
 ---
 
@@ -20,17 +9,17 @@ Dashboard financeiro unificado que ingere dados de múltiplas fontes (digitaçã
 ```
 dashboard_financeiro/
 ├── app.py            # Interface Streamlit (entry point)
-├── database.py       # Módulo SQLite: schema, leitura e escrita
-├── parsers.py        # Parsers: Excel/CSV, PDF, PPTX
-├── requirements.txt  # Dependências pinadas
+├── database.py       # Módulo PostgreSQL/Supabase via SQLAlchemy
+├── parsers.py        # Parsers: Imagens(OCR), Excel/CSV, PDF, PPTX
+├── requirements.txt  # Dependências do projeto
 └── README.md         # Este arquivo
 ```
 
 | Módulo         | Responsabilidade                                      |
 |----------------|-------------------------------------------------------|
-| `database.py`  | Cria `financeiro.db`, funções de CRUD e retry policy  |
-| `parsers.py`   | Extrai DataFrames de `.xlsx`, `.csv`, `.pdf`, `.pptx` |
-| `app.py`       | Interface Streamlit: sidebar, upload, KPIs, tabelas   |
+| `database.py`  | Conexão com Supabase, DDL nativo e inserções otimizadas em lote |
+| `parsers.py`   | Extrai DataFrames e dicionários de `.png/.jpg`, `.xlsx`, `.csv`, `.pdf`, `.pptx` |
+| `app.py`       | Interface Streamlit: temas, sidebar, upload de arquivos, OCR de imagens, KPIs, tabelas   |
 
 ---
 
@@ -38,42 +27,45 @@ dashboard_financeiro/
 
 - Python **3.11+**
 - Git instalado localmente
-- Conta no [Hugging Face](https://huggingface.co) com acesso ao Spaces
+- Conta no [GitHub](https://github.com)
+- Conta no [Streamlit Community Cloud](https://streamlit.io/cloud)
+- Projeto criado no [Supabase](https://supabase.com) com um banco de dados PostgreSQL
 
 ---
 
-## 🚀 Deploy no Hugging Face Spaces
+## 🚀 Deploy no Streamlit Community Cloud
 
-### 1. Clonar e preparar o repositório local
+### 1. Preparar o Repositório no GitHub
 
-```bash
-# Clone seu Space vazio (substitua <usuario> e <nome-do-space>)
-git clone https://huggingface.co/spaces/<usuario>/<nome-do-space>
-cd <nome-do-space>
+Suba todo o código deste projeto para um repositório público ou privado no GitHub.
 
-# Copie os arquivos do projeto
-cp /caminho/do/projeto/* .
-```
+### 2. Configurar o Streamlit Cloud
 
-### 2. Commit e push
+1. Acesse o painel do Streamlit Community Cloud.
+2. Clique em **New app** e conecte seu repositório GitHub.
+3. Selecione o branch (ex: `main`) e o arquivo principal `app.py`.
+4. Antes de clicar em *Deploy*, clique em **Advanced settings**.
+5. Na seção **Secrets**, adicione a string de conexão do seu Supabase:
+   ```toml
+   DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/<dbname>"
+   ```
+6. Clique em **Deploy**.
 
-```bash
-git add app.py database.py parsers.py requirements.txt README.md
-git commit -m "feat: dashboard financeiro multifonte v1.0"
-git push
-```
-
-O Hugging Face detecta o `sdk: streamlit` no frontmatter do README e faz o deploy automaticamente. O build instala as dependências do `requirements.txt` e executa `streamlit run app.py`.
-
-### 3. Verificar o deploy
-
-Acesse: `https://huggingface.co/spaces/<usuario>/<nome-do-space>`
-
-O Space ficará disponível publicamente em ~2 minutos após o push.
+O Streamlit instalará as dependências do `requirements.txt` automaticamente.
 
 ---
 
-## 🖥️ Execução local
+## 🖥️ Execução Local
+
+### 1. Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz do projeto (ou configure no seu terminal) com a URL do seu Supabase:
+
+```bash
+export DATABASE_URL="postgresql://usuario:senha@host:5432/postgres"
+```
+
+### 2. Rodar a aplicação
 
 ```bash
 # Instalar dependências
@@ -87,10 +79,11 @@ Acesse em: `http://localhost:8501`
 
 ---
 
-## 📁 Formatos de arquivo suportados
+## 📁 Formatos de Arquivo Suportados
 
-| Formato  | Parser usado   | Colunas esperadas             |
+| Formato  | Parser usado   | Colunas / Dados Esperados             |
 |----------|----------------|-------------------------------|
+| `.png, .jpg, .jpeg` | easyocr | Escaneia e extrai: `Valor`, `Data`, `Hora` |
 | `.xlsx`  | pandas/openpyxl| `data`, `categoria`, `valor`  |
 | `.csv`   | pandas         | `data`, `categoria`, `valor`  |
 | `.pdf`   | pdfplumber     | Tabelas nativas ou texto livre|
@@ -100,24 +93,22 @@ Acesse em: `http://localhost:8501`
 
 ---
 
-## 🛡️ Guardrails implementados
+## 🛡️ Segurança e Resiliência
 
-- **Sem perda de dados:** toda escrita vai direto ao SQLite — nada fica apenas em `session_state`.
-- **Retry policy:** conexões SQLite com até 5 tentativas e intervalo de 0.3s para evitar `SQLITE_BUSY`.
-- **Resiliência de parsing:** erros por linha/slide são logados e ignorados; o app nunca trava.
-- **Diagnóstico visual:** falhas de upload exibem `st.error()` com tipo de exceção e mensagem.
-- **Precisão financeira:** valores armazenados com exatamente 2 casas decimais (`round(v, 2)`).
+- **Direct Connection PostgreSQL:** Usa parâmetros no SQLAlchemy (`pool_size`, `pool_pre_ping`) otimizados para Supabase.
+- **OCR Fallback:** O módulo `easyocr` carrega sob demanda, impedindo crashes se houver erro de carregamento inicial.
+- **Bulk Insert Atômico:** Dados enviados em lote com método `to_sql(method="multi")` do pandas.
+- **Segurança de Credentials:** Não salva senhas no código, lendo estritamente via `os.getenv`.
 
 ---
 
 ## 📊 Funcionalidades
 
-- **Inserção manual** via sidebar: data, categoria (4 opções fixas), valor
-- **Upload multifonte** com pré-visualização antes de importar
-- **KPIs automáticos:** total, maior despesa, média, total de registros
-- **Totalizadores por categoria** com gráfico de barras interativo (Plotly)
-- **Evolução mensal** por categoria (gráfico de linha)
-- **Tabela filtrável** com todas as colunas do banco
+- **Múltiplos Temas (Dark/Light):** Alternância instantânea via barra lateral.
+- **Leitura de Comprovantes (Foto/Câmera):** OCR para extrair valor e data de notas fiscais.
+- **Inserção Manual** via sidebar rápida.
+- **Upload Multifonte** em lote.
+- **KPIs Automáticos e Dashboards** utilizando Plotly.
 
 ---
 

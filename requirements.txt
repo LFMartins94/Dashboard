@@ -1,5 +1,5 @@
 # Dashboard Financeiro — Dependências
-# Testado em Python 3.11+ / Hugging Face Spaces (Linux)
+# Testado em Python 3.11+ / Streamlit Community Cloud (Linux)
 
 # requirements.txt
 streamlit
@@ -10,3 +10,5 @@ python-pptx
 pdfplumber
 psycopg2-binary
 SQLAlchemy
+easyocr
+Pillow

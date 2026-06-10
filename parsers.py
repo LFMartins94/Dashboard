@@ -550,6 +550,53 @@ def extrair_dados_powerpoint(arquivo: BinaryIO) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Parser OCR para Comprovantes (Imagem)
+# ---------------------------------------------------------------------------
+def extrair_dados_comprovante_imagem(imagem_bytes: bytes) -> dict | None:
+    """
+    Extrai informações estruturadas (Valor total, Data, Hora) de uma imagem
+    de comprovante fiscal usando OCR.
+    """
+    try:
+        import easyocr
+    except ImportError:
+        logger.error("easyocr não instalado. Impossível ler imagens.")
+        return None
+
+    try:
+        reader = easyocr.Reader(['pt', 'en'], gpu=False, verbose=False)
+        resultados = reader.readtext(imagem_bytes, detail=0)
+        texto_completo = " ".join(resultados)
+
+        # 1. Extrair Data
+        data_match = _RE_DATA.search(texto_completo) or _RE_DATA_ISO.search(texto_completo)
+        data_str = data_match.group(1) if data_match else ""
+
+        # 2. Extrair Hora
+        hora_match = re.search(r"\b(\d{2}:\d{2}(?::\d{2})?)\b", texto_completo)
+        hora_str = hora_match.group(1) if hora_match else ""
+
+        # 3. Extrair Valor Total (pegamos o maior valor monetário encontrado)
+        valores_encontrados = _RE_VALOR.findall(texto_completo)
+        maior_valor = 0.0
+        for v in valores_encontrados:
+            val_flt = _normalizar_valor(v)
+            if val_flt > maior_valor:
+                maior_valor = val_flt
+
+        return {
+            "valor": maior_valor if maior_valor > 0 else None,
+            "data": data_str if data_str else None,
+            "hora": hora_str if hora_str else None,
+            "texto_extraido": texto_completo
+        }
+
+    except Exception as exc:
+        logger.error("Falha ao processar OCR da imagem: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher público
 # ---------------------------------------------------------------------------
 def processar_arquivo(arquivo: BinaryIO) -> tuple[pd.DataFrame, str]:
@@ -564,5 +611,22 @@ def processar_arquivo(arquivo: BinaryIO) -> tuple[pd.DataFrame, str]:
         return extrair_dados_pdf(arquivo), "pdf"
     elif ext == "pptx":
         return extrair_dados_powerpoint(arquivo), "pptx"
+    elif ext in ("png", "jpg", "jpeg"):
+        conteudo = arquivo.read()
+        if hasattr(arquivo, "seek"):
+            arquivo.seek(0)
+        dict_dados = extrair_dados_comprovante_imagem(conteudo)
+        if dict_dados:
+            reg = {
+                "data": _normalizar_data(dict_dados.get("data") or ""),
+                "categoria": "Despesa de Comprovante (OCR)",
+                "valor": dict_dados.get("valor") or 0.0,
+                "tipo": "Saída",
+                "status": "Pago",
+                "prioridade": "Normal",
+                "origem_aba": "Imagem OCR",
+            }
+            return pd.DataFrame([reg]), "imagem"
+        return _df_vazio(), "imagem"
     else:
-        raise ValueError(f"Extensão '.{ext}' não suportada. Use: xlsx, csv, pdf ou pptx.")
+        raise ValueError(f"Extensão '.{ext}' não suportada. Use: xlsx, csv, pdf, pptx, png, jpg ou jpeg.")
