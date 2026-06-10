@@ -24,12 +24,25 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Gerenciamento Seguro de Conexão (Hardening via Environment Variables)
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL")
+def get_database_url() -> str:
+    # 1. Tenta pegar do st.secrets (Streamlit Cloud)
+    try:
+        import streamlit as st
+        if "DATABASE_URL" in st.secrets:
+            return st.secrets["DATABASE_URL"]
+    except Exception:
+        pass
 
-# Fallback: usa a connection string do Supabase caso a variável de ambiente não esteja definida
-if not DATABASE_URL:
-    logger.warning("Variável de ambiente DATABASE_URL não encontrada. Usando string de conexão de fallback (Supabase).")
-    DATABASE_URL = "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:5432/postgres"
+    # 2. Tenta pegar das variáveis de ambiente local
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
+
+    # 3. Fallback (Pode estar pausado se for projeto gratuito no Supabase)
+    logger.warning("Variável DATABASE_URL não encontrada. Usando string de conexão de fallback (Supabase).")
+    return "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:5432/postgres"
+
+DATABASE_URL = get_database_url()
 
 # Correção automática de dialeto exigida pelo SQLAlchemy moderno
 if DATABASE_URL.startswith("postgres://"):

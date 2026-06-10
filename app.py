@@ -44,10 +44,19 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 def _init_session() -> None:
     """
-    Garante que o banco exista e carrega os dados históricos do SQLite
+    Garante que o banco exista e carrega os dados históricos
     no estado da sessão. Executado uma única vez por sessão.
     """
-    inicializar_banco()
+    try:
+        inicializar_banco()
+    except Exception as exc:
+        st.error("🚨 **Erro de Conexão com o Banco de Dados!**")
+        st.markdown(
+            "O aplicativo não conseguiu se conectar ao PostgreSQL (Supabase). "
+            "Isso geralmente acontece se o banco de dados estiver pausado ou se a variável `DATABASE_URL` não estiver configurada corretamente nas Secrets do Streamlit."
+        )
+        st.stop()
+
     if "db_financeiro" not in st.session_state:
         st.session_state.db_financeiro = carregar_todos_os_gastos()
 
