@@ -45,9 +45,9 @@ Suba todo o código deste projeto para um repositório público ou privado no Gi
 2. Clique em **New app** e conecte seu repositório GitHub.
 3. Selecione o branch (ex: `main`) e o arquivo principal `app.py`.
 4. Antes de clicar em *Deploy*, clique em **Advanced settings**.
-5. Na seção **Secrets**, adicione a string de conexão do seu Supabase:
+5. Na seção **Secrets**, adicione a string de conexão do seu Supabase (utilizando a porta 6543 para suporte a IPv4 em instâncias Cloud via Pooler Transacional):
    ```toml
-   DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/<dbname>"
+   DATABASE_URL = "postgresql://<user>:<password>@<host>:6543/<dbname>?sslmode=require"
    ```
 6. Clique em **Deploy**.
 

@@ -40,7 +40,7 @@ def get_database_url() -> str:
 
     # 3. Fallback (Pode estar pausado se for projeto gratuito no Supabase)
     logger.warning("Variável DATABASE_URL não encontrada. Usando string de conexão de fallback (Supabase).")
-    return "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:5432/postgres"
+    return "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:6543/postgres"
 
 DATABASE_URL = get_database_url()
 
@@ -48,16 +48,18 @@ DATABASE_URL = get_database_url()
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O SUPABASE (PORTA 5432)
+# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O POOLER DO SUPABASE (PORTA 6543 / IPv4)
 # - pool_size e max_overflow: controlam a concorrência dentro do limite do plano.
 # - pool_recycle: Fecha conexões ociosas a cada 30 min, evitando a queda do pooler.
 # - pool_pre_ping: Garante resiliência testando a conexão antes de executar o SQL.
+# - connect_args: SSL mode 'require' obrigatório para tráfego cloud.
 engine = create_engine(
     DATABASE_URL,
     pool_size=5,
     max_overflow=10,
     pool_recycle=1800,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    connect_args={"sslmode": "require"}
 )
 
 SENTINEL: str = "NÃO ENCONTRADO"
