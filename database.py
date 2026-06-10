@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Fallback de segurança caso rode localmente sem a variável configurada
+# Fallback: usa a connection string do Supabase caso a variável de ambiente não esteja definida
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///financeiro.db"
+    DATABASE_URL = "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:5432/postgres"
 
 # Correção automática de dialeto exigida pelo SQLAlchemy moderno
 if DATABASE_URL.startswith("postgres://"):
@@ -156,7 +156,7 @@ def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo") -> int
                 con=conn,
                 if_exists="append",
                 index=False,
-                幕method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
+                method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
                 chunksize=1000  # Envia de 1000 em 1000 linhas por bloco
             )
         return len(df_final)
