@@ -3,9 +3,9 @@
 # Não remova os números de versão — eles evitam quebras silenciosas em produção.
 # Para atualizar uma biblioteca, teste localmente antes de alterar aqui.
 
-streamlit==1.45.0
+streamlit==1.41.1
 pandas==2.2.2
-plotly==5.24.1
+plotly==5.22.0
 openpyxl==3.1.5
 python-pptx==1.0.2
 pdfplumber==0.11.4
@@ -15,5 +15,4 @@ Pillow==10.4.0
 xlsxwriter==3.2.0
 reportlab==4.2.5
 python-dotenv==1.0.1
-openai==1.51.0
-easyocr==1.7.2
+openai==1.51.2
