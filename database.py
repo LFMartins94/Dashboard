@@ -134,8 +134,18 @@ CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON mensagens(conversa_id);
 # ---------------------------------------------------------------------------
 # Inicialização do Banco
 # ---------------------------------------------------------------------------
+TABELAS = [
+    "empresas",
+    "lancamentos",
+    "conciliacoes",
+    "ocorrencias_auditoria",
+    "conversas",
+    "mensagens",
+]
+
+
 def inicializar_banco() -> None:
-    """Garante que todas as tabelas e índices existam no PostgreSQL."""
+    """Garante que todas as tabelas, índices e políticas RLS existam no PostgreSQL."""
     try:
         with engine.begin() as conn:
             conn.execute(text(DDL))
@@ -143,6 +153,30 @@ def inicializar_banco() -> None:
     except SQLAlchemyError as exc:
         logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
         raise exc
+
+    # Ativar Row Level Security em todas as tabelas
+    for tabela in TABELAS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {tabela} ENABLE ROW LEVEL SECURITY;"))
+            logger.info("RLS ativado em '%s'.", tabela)
+        except SQLAlchemyError:
+            logger.warning("RLS já ativo ou não foi possível ativar em '%s'.", tabela)
+
+    # Revogar acesso público (anon) em todas as tabelas
+    for tabela in TABELAS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        f"REVOKE ALL ON {tabela} FROM anon, authenticated;"
+                    )
+                )
+            logger.info("Acesso revogado em '%s' para anon/authenticated.", tabela)
+        except SQLAlchemyError:
+            logger.warning(
+                "Privilégios já revogados ou não foi possível revogar em '%s'.", tabela
+            )
 
 # ---------------------------------------------------------------------------
 # Operações de Escrita
