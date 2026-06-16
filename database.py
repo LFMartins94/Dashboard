@@ -107,12 +107,28 @@ CREATE TABLE IF NOT EXISTS ocorrencias_auditoria (
    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS conversas (
+   id SERIAL PRIMARY KEY,
+   titulo VARCHAR(200) NOT NULL DEFAULT 'Nova conversa',
+   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mensagens (
+   id SERIAL PRIMARY KEY,
+   conversa_id INTEGER NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+   role VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+   conteudo TEXT NOT NULL,
+   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índices para otimização de consultas
 CREATE INDEX IF NOT EXISTS idx_lancamentos_empresa ON lancamentos(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_conta ON lancamentos(conta_contabil);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_periodo ON lancamentos(periodo);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo ON lancamentos(tipo);
+CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON mensagens(conversa_id);
 """
 
 # ---------------------------------------------------------------------------
@@ -370,3 +386,84 @@ def carregar_lancamentos(empresa_id: int = None, periodo: str = None) -> pd.Data
     except SQLAlchemyError as exc:
         logger.error(f"Falha ao carregar lançamentos: {exc}")
         return pd.DataFrame()
+
+# ---------------------------------------------------------------------------
+# Operações — Assistente / Chat
+# ---------------------------------------------------------------------------
+
+def criar_conversa(titulo: str = "Nova conversa") -> int:
+    sql = text("INSERT INTO conversas (titulo) VALUES (:titulo) RETURNING id")
+    try:
+        with engine.begin() as conn:
+            new_id = conn.execute(sql, {"titulo": titulo}).scalar_one()
+        logger.info("Conversa criada (id=%d).", new_id)
+        return new_id
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao criar conversa: %s", exc)
+        raise exc
+
+
+def salvar_mensagem(conversa_id: int, role: str, conteudo: str) -> None:
+    insert_sql = text(
+        "INSERT INTO mensagens (conversa_id, role, conteudo) VALUES (:conversa_id, :role, :conteudo)"
+    )
+    update_sql = text(
+        "UPDATE conversas SET atualizado_em = CURRENT_TIMESTAMP WHERE id = :id"
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(insert_sql, {"conversa_id": conversa_id, "role": role, "conteudo": conteudo})
+            conn.execute(update_sql, {"id": conversa_id})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao salvar mensagem: %s", exc)
+        raise exc
+
+
+def carregar_mensagens(conversa_id: int) -> list[dict]:
+    sql = text(
+        "SELECT role, conteudo FROM mensagens WHERE conversa_id = :conversa_id ORDER BY criado_em ASC"
+    )
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql, {"conversa_id": conversa_id}).fetchall()
+        return [{"role": row[0], "conteudo": row[1]} for row in rows]
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao carregar mensagens: %s", exc)
+        return []
+
+
+def listar_conversas() -> list[dict]:
+    sql = text(
+        "SELECT id, titulo, atualizado_em FROM conversas ORDER BY atualizado_em DESC"
+    )
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [
+            {"id": row[0], "titulo": row[1], "atualizado_em": row[2]}
+            for row in rows
+        ]
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao listar conversas: %s", exc)
+        return []
+
+
+def renomear_conversa(conversa_id: int, titulo: str) -> None:
+    sql = text("UPDATE conversas SET titulo = :titulo WHERE id = :id")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"id": conversa_id, "titulo": titulo})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao renomear conversa %d: %s", conversa_id, exc)
+        raise exc
+
+
+def deletar_conversa(conversa_id: int) -> None:
+    sql = text("DELETE FROM conversas WHERE id = :id")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"id": conversa_id})
+        logger.info("Conversa %d deletada.", conversa_id)
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao deletar conversa %d: %s", conversa_id, exc)
+        raise exc

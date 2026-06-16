@@ -14,10 +14,16 @@ import relatorios
 from database import (
     atualizar_ocorrencia_resolvida,
     carregar_lancamentos,
+    carregar_mensagens,
     carregar_ocorrencias,
+    criar_conversa,
+    deletar_conversa,
     inicializar_banco,
+    listar_conversas,
     listar_empresas,
     listar_periodos,
+    renomear_conversa,
+    salvar_mensagem,
 )
 
 logging.basicConfig(
@@ -154,6 +160,31 @@ def aplicar_tema(escuro: bool):
         [data-testid="stChatMessageContent"] p {{
             color: {text_primary};
         }}
+
+        {f'''
+        /* Dark mode — inputs com contraste garantido */
+        input, textarea, [data-baseweb="input"] input,
+        [data-baseweb="textarea"] textarea {{
+            color: #E8E8E8 !important;
+            background-color: #1E2530 !important;
+        }}
+        [data-baseweb="select"] > div {{
+            color: #E8E8E8 !important;
+            background-color: #1E2530 !important;
+        }}
+        .stTextInput > div, .stSelectbox > div,
+        .stTextArea > div {{
+            border-color: #3A4150 !important;
+            background-color: #1E2530 !important;
+        }}
+        input::placeholder, textarea::placeholder {{
+            color: #6A7280 !important;
+        }}
+        label, .stSelectbox label, .stTextInput label,
+        .stTextArea label, .stRadio label, .stCheckbox label {{
+            color: #B0B8C8 !important;
+        }}
+        ''' if escuro else ''}
     </style>
     """, unsafe_allow_html=True)
 
@@ -184,6 +215,38 @@ def _fmt_brl(valor: float) -> str:
     s = f"R$ {valor:,.2f}"
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
+def formatar_periodo(p: str) -> str:
+    try:
+        partes = p.split("-")
+        return f"{partes[1]}/{partes[0]}"
+    except Exception:
+        return p
+
+def _selectbox_periodo(label: str, periodos: list, key: str) -> None:
+    opcoes = ["Todos"]
+    mapa = {}
+    for p in (periodos or []):
+        d = formatar_periodo(p)
+        mapa[d] = p
+        opcoes.append(d)
+    valor_atual = st.session_state.get(key, "Todos")
+    display_atual = "Todos" if valor_atual == "Todos" else formatar_periodo(valor_atual)
+    if display_atual not in opcoes:
+        display_atual = "Todos"
+    selecionado = st.selectbox(label, opcoes, index=opcoes.index(display_atual))
+    if selecionado == "Todos":
+        st.session_state[key] = "Todos"
+    else:
+        st.session_state[key] = mapa[selecionado]
+
+def _formatar_df_exibicao(df):
+    df = df.copy()
+    if "data" in df.columns:
+        df["data"] = pd.to_datetime(df["data"]).dt.strftime("%d/%m/%Y")
+    if "periodo" in df.columns:
+        df["periodo"] = df["periodo"].apply(formatar_periodo)
+    return df
+
 # ── 4. Inicialização ─────────────────────────────────────────────
 @st.cache_resource
 def _inicializar():
@@ -207,6 +270,36 @@ with st.sidebar:
     st.divider()
     pagina = st.radio("Navegação", PAGINAS, label_visibility="collapsed")
     st.divider()
+
+    if pagina == "Assistente":
+        if st.button("Nova conversa", type="primary", use_container_width=True):
+            conv_id = criar_conversa()
+            st.session_state.conversa_ativa = conv_id
+            st.rerun()
+
+        conversas = listar_conversas()
+        for conv in conversas:
+            c1, c2 = st.columns([5, 1])
+            with c1:
+                ativo = st.session_state.get("conversa_ativa") == conv["id"]
+                label = conv["titulo"]
+                if st.button(
+                    label,
+                    key=f"conv_{conv['id']}",
+                    use_container_width=True,
+                    type="primary" if ativo else "secondary",
+                ):
+                    st.session_state.conversa_ativa = conv["id"]
+                    st.rerun()
+            with c2:
+                if st.button("X", key=f"del_{conv['id']}", use_container_width=True):
+                    if st.session_state.get("conversa_ativa") == conv["id"]:
+                        st.session_state.conversa_ativa = None
+                    deletar_conversa(conv["id"])
+                    st.rerun()
+
+        st.divider()
+
     tema_escuro = st.toggle("Modo escuro", key="tema_escuro")
     st.button("Sair", on_click=auth.logout)
 
@@ -222,7 +315,7 @@ def _periodo_do_filtro() -> str | None:
     return None if val == "Todos" else val
 
 # ── 7. Filtros globais ───────────────────────────────────────────
-exibe_filtros = pagina in ("Painel", "Lançamentos", "Relatórios", "Assistente")
+exibe_filtros = pagina in ("Painel", "Lançamentos", "Relatórios")
 if exibe_filtros:
     empresas_df = listar_empresas()
     if not empresas_df.empty:
@@ -239,10 +332,7 @@ if exibe_filtros:
                 row = empresas_df.loc[empresas_df["nome"] == emp_atual]
                 st.session_state._empresa_id = int(row["id"].iloc[0])
                 periodos = listar_periodos(st.session_state._empresa_id)
-            opcoes_per = ["Todos"] + (periodos or [])
-            if st.session_state.get("periodo_selecionado") not in opcoes_per:
-                st.session_state.periodo_selecionado = "Todos"
-            st.selectbox("Período", opcoes_per, key="periodo_selecionado")
+            _selectbox_periodo("Período", periodos, key="periodo_selecionado")
     else:
         empresas_df = pd.DataFrame()
         st.info("Nenhuma empresa cadastrada.")
@@ -323,16 +413,18 @@ elif pagina == "Lançamentos":
                     return f"color: {tokens['negative']}; font-weight: 600"
                 return ""
 
-            styled = df.style.applymap(_cor_tipo, subset=["tipo"])
+            df_exibir = _formatar_df_exibicao(df)
+            styled = df_exibir.style.map(_cor_tipo, subset=["tipo"])
             st.dataframe(
                 styled,
                 column_config={
-                    "data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                    "data": "Data",
                     "conta_contabil": "Conta Contábil",
-                    "valor": st.column_config.NumberColumn("Valor", format="R$ ,.2f"),
+                    "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ ,.2f"),
                     "tipo": st.column_config.TextColumn("Tipo", help="C = Crédito, D = Débito"),
                     "historico": "Histórico",
                     "filial": "Filial",
+                    "periodo": "Período",
                 },
                 use_container_width=True,
                 hide_index=True,
@@ -354,7 +446,7 @@ elif pagina == "Importar":
     if pendente:
         st.warning(
             f"Já existem lançamentos para esta empresa no período "
-            f"**{pendente['periodo']}**. Deseja substituir?"
+            f"**{formatar_periodo(pendente['periodo'])}**. Deseja substituir?"
         )
         col1, col2 = st.columns(2)
         with col1:
@@ -395,7 +487,7 @@ elif pagina == "Importar":
 
             with st.expander("Detalhes da auditoria"):
                 st.dataframe(
-                    pd.DataFrame(dados["ocorrencias"]),
+                    _formatar_df_exibicao(pd.DataFrame(dados["ocorrencias"])),
                     use_container_width=True,
                     hide_index=True,
                 )
@@ -410,10 +502,10 @@ elif pagina == "Importar":
 
                 if not conc["df_pares"].empty:
                     st_secao("PARES CONCILIADOS")
-                    st.dataframe(conc["df_pares"], use_container_width=True, hide_index=True)
+                    st.dataframe(_formatar_df_exibicao(conc["df_pares"]), use_container_width=True, hide_index=True)
                 if not conc["df_sem_par"].empty:
                     st_secao("LANÇAMENTOS SEM PAR")
-                    st.dataframe(conc["df_sem_par"], use_container_width=True, hide_index=True)
+                    st.dataframe(_formatar_df_exibicao(conc["df_sem_par"]), use_container_width=True, hide_index=True)
 
         if st.button("Nova importação"):
             st.session_state.import_concluido = False
@@ -480,7 +572,8 @@ elif pagina == "Conciliação":
         if not periodos:
             st.info("Nenhum período encontrado para esta empresa.")
         else:
-            periodo = st.selectbox("Período", periodos, key="con_per")
+            _selectbox_periodo("Período", periodos, key="con_per")
+            periodo = st.session_state.get("con_per")
 
             df_lanc = carregar_lancamentos(empresa_id, periodo)
             if df_lanc.empty:
@@ -497,10 +590,10 @@ elif pagina == "Conciliação":
 
                 if not resultado["df_pares"].empty:
                     st_secao("PARES CONCILIADOS")
-                    st.dataframe(resultado["df_pares"], use_container_width=True, hide_index=True)
+                    st.dataframe(_formatar_df_exibicao(resultado["df_pares"]), use_container_width=True, hide_index=True)
                 if not resultado["df_sem_par"].empty:
                     st_secao("LANÇAMENTOS SEM PAR")
-                    st.dataframe(resultado["df_sem_par"], use_container_width=True, hide_index=True)
+                    st.dataframe(_formatar_df_exibicao(resultado["df_sem_par"]), use_container_width=True, hide_index=True)
 
                 st.divider()
                 df_relatorio = conciliacao.gerar_relatorio_conciliacao(resultado)
@@ -536,7 +629,8 @@ elif pagina == "Auditoria":
         if not periodos:
             st.info("Nenhum período encontrado para esta empresa.")
         else:
-            periodo = st.selectbox("Período", periodos, key="aud_per")
+            _selectbox_periodo("Período", periodos, key="aud_per")
+            periodo = st.session_state.get("aud_per")
 
             df_oc = carregar_ocorrencias(empresa_id, periodo)
             if df_oc.empty:
@@ -650,72 +744,40 @@ elif pagina == "Relatórios":
 
 # ── Assistente ───────────────────────────────────────────────────
 elif pagina == "Assistente":
-    if empresas_df.empty:
-        st.info("Nenhuma empresa cadastrada. Importe lançamentos primeiro.")
-    else:
-        empresa_id = _empresa_id_do_filtro()
-        periodo = _periodo_do_filtro()
-        empresa_nome = st.session_state.get("empresa_selecionada", "Todas")
+    if "conversa_ativa" not in st.session_state:
+        conv_id = criar_conversa()
+        st.session_state.conversa_ativa = conv_id
+        st.rerun()
 
-        if not empresa_id or not periodo:
-            st.info("Selecione uma empresa e um período para conversar com o assistente.")
-        else:
-            st.divider()
+    conversa_id = st.session_state.conversa_ativa
 
-            # Inicializa histórico
-            if "historico_chat" not in st.session_state:
-                st.session_state.historico_chat = []
+    mensagens = carregar_mensagens(conversa_id)
 
-            # Gera ou recupera o contexto resumido
-            if "contexto_assistente" not in st.session_state:
-                with st.spinner("Preparando contexto dos dados..."):
-                    st.session_state.contexto_assistente = assistente.montar_contexto_resumido(
-                        empresa_id, periodo, empresa_nome
-                    )
+    for msg in mensagens:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["conteudo"])
 
-            # Exibe o contexto em um expander
-            with st.expander("Contexto enviado ao assistente"):
-                st.text(st.session_state.contexto_assistente)
+    pergunta = st.chat_input("Digite sua mensagem...")
+    if pergunta:
+        salvar_mensagem(conversa_id, "user", pergunta)
 
-            st.divider()
+        primeira_mensagem = len(mensagens) == 0
+        if primeira_mensagem:
+            titulo = assistente.gerar_titulo_conversa(pergunta)
+            renomear_conversa(conversa_id, titulo)
 
-            # Botão de limpar conversa
-            col_msg, col_btn = st.columns([4, 1])
-            with col_btn:
-                if st.button("Limpar conversa", use_container_width=True):
-                    st.session_state.historico_chat = []
-                    st.session_state.contexto_assistente = assistente.montar_contexto_resumido(
-                        empresa_id, periodo, empresa_nome
-                    )
-                    st.rerun()
+        with st.chat_message("user"):
+            st.markdown(pergunta)
 
-            with col_msg:
-                st.markdown(f"**Assistente ContaView — {empresa_nome} / {periodo}**")
+        with st.chat_message("assistant"):
+            with st.spinner("Pensando..."):
+                historico = [{"role": m["role"], "content": m["conteudo"]} for m in mensagens]
+                historico.append({"role": "user", "content": pergunta})
+                resposta = assistente.perguntar_ao_assistente(historico)
+            st.markdown(resposta)
 
-            # Exibe histórico
-            for msg in st.session_state.historico_chat:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-
-            # Campo de entrada
-            pergunta = st.chat_input("Pergunte sobre os dados...")
-            if pergunta:
-                st.session_state.historico_chat.append({"role": "user", "content": pergunta})
-
-                with st.chat_message("user"):
-                    st.markdown(pergunta)
-
-                with st.chat_message("assistant"):
-                    with st.spinner("Consultando assistente..."):
-                        resposta = assistente.perguntar_ao_assistente(
-                            pergunta,
-                            st.session_state.contexto_assistente,
-                            st.session_state.historico_chat[:-1],
-                        )
-                    st.markdown(resposta)
-
-                st.session_state.historico_chat.append({"role": "assistant", "content": resposta})
-                st.rerun()
+        salvar_mensagem(conversa_id, "assistant", resposta)
+        st.rerun()
 
 # ── Fallback ─────────────────────────────────────────────────────
 else:
