@@ -154,30 +154,6 @@ def inicializar_banco() -> None:
         logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
         raise exc
 
-    # Ativar Row Level Security em todas as tabelas
-    for tabela in TABELAS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {tabela} ENABLE ROW LEVEL SECURITY;"))
-            logger.info("RLS ativado em '%s'.", tabela)
-        except SQLAlchemyError:
-            logger.warning("RLS já ativo ou não foi possível ativar em '%s'.", tabela)
-
-    # Revogar acesso público (anon) em todas as tabelas
-    for tabela in TABELAS:
-        try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        f"REVOKE ALL ON {tabela} FROM anon, authenticated;"
-                    )
-                )
-            logger.info("Acesso revogado em '%s' para anon/authenticated.", tabela)
-        except SQLAlchemyError:
-            logger.warning(
-                "Privilégios já revogados ou não foi possível revogar em '%s'.", tabela
-            )
-
 # ---------------------------------------------------------------------------
 # Operações de Escrita
 # ---------------------------------------------------------------------------
