@@ -12,3 +12,6 @@ psycopg2-binary
 SQLAlchemy
 easyocr
 Pillow
+xlsxwriter
+reportlab
+google-generativeai

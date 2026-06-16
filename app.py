@@ -1,379 +1,722 @@
-"""
-app.py
-======
-Interface principal do Dashboard de Ingestão Multifonte & Persistência.
-Combina inserção manual, upload de arquivos e visualização de KPIs financeiros.
-"""
-
 import logging
-from datetime import date, datetime
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
+import assistente
+import auditoria
+import auth
+import conciliacao
+import importacao
+import relatorios
 from database import (
-    carregar_todos_os_gastos,
+    atualizar_ocorrencia_resolvida,
+    carregar_lancamentos,
+    carregar_ocorrencias,
     inicializar_banco,
-    salvar_dataframe_otimizado,  # Atualizado para a versão em lote refatorada
-    salvar_registro,
+    listar_empresas,
+    listar_periodos,
 )
-from parsers import processar_arquivo, extrair_dados_comprovante_imagem
 
-# ---------------------------------------------------------------------------
-# Configuração global
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-CATEGORIAS: list[str] = ["Infraestrutura", "Marketing", "Logística", "Operações"]
-
 st.set_page_config(
-    page_title="Dashboard Financeiro",
-    page_icon="💰",
+    page_title="ContaView",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# ── 1. Autenticação ──────────────────────────────────────────────
+if not st.session_state.get("autenticado", False):
+    auth.exibir_tela_login()
+    st.stop()
 
-# ---------------------------------------------------------------------------
-# Inicialização do estado da sessão
-# ---------------------------------------------------------------------------
-def _init_session() -> None:
-    """
-    Garante que o banco exista e carrega os dados históricos
-    no estado da sessão. Executado uma única vez por sessão.
-    """
-    try:
-        inicializar_banco()
-    except Exception as exc:
-        st.error("🚨 **Erro de Conexão com o Banco de Dados!**")
-        st.markdown(
-            "O aplicativo não conseguiu se conectar ao PostgreSQL (Supabase). "
-            "Isso geralmente acontece se o banco de dados estiver pausado ou se a variável `DATABASE_URL` não estiver configurada corretamente nas Secrets do Streamlit."
-        )
-        st.stop()
+# ── 2. Injeção de CSS (tema) ─────────────────────────────────────
+def aplicar_tema(escuro: bool):
+    if escuro:
+        sidebar_bg      = "#090B0F"
+        sidebar_text    = "#4A5260"
+        sidebar_active  = "#00C9A0"
+        sidebar_active_bg = "#0D1F1B"
+        content_bg      = "#0F1117"
+        card_bg         = "#161920"
+        border          = "#1E2128"
+        text_primary    = "#E8E8E8"
+        text_secondary  = "#4A5260"
+        accent          = "#00C9A0"
+        positive        = "#00C9A0"
+        negative        = "#FF6B5B"
+        warning         = "#F0A840"
+        info            = "#5BA8E8"
+    else:
+        sidebar_bg      = "#2C3540"
+        sidebar_text    = "#8FA0AE"
+        sidebar_active  = "#7EB8C4"
+        sidebar_active_bg = "#3D4F5C"
+        content_bg      = "#F2F0EA"
+        card_bg         = "#FFFFFF"
+        border          = "#E0DDD5"
+        text_primary    = "#1A1916"
+        text_secondary  = "#7A7870"
+        accent          = "#7EB8C4"
+        positive        = "#2D8C5E"
+        negative        = "#C94B3C"
+        warning         = "#BA7517"
+        info            = "#3A7DBF"
 
-    if "db_financeiro" not in st.session_state:
-        st.session_state.db_financeiro = carregar_todos_os_gastos()
+    st.session_state.theme_tokens = {
+        "sidebar_bg": sidebar_bg,
+        "sidebar_text": sidebar_text,
+        "sidebar_active": sidebar_active,
+        "content_bg": content_bg,
+        "card_bg": card_bg,
+        "border": border,
+        "text_primary": text_primary,
+        "text_secondary": text_secondary,
+        "accent": accent,
+        "positive": positive,
+        "negative": negative,
+        "warning": warning,
+        "info": info,
+    }
 
+    st.markdown(f"""
+    <style>
+        .stApp {{ background-color: {content_bg}; }}
 
-def _atualizar_dados_sessao() -> None:
-    """Sincroniza o estado da sessão com os dados mais recentes do banco."""
-    st.session_state.db_financeiro = carregar_todos_os_gastos()
+        [data-testid="stSidebar"] {{
+            background-color: {sidebar_bg};
+        }}
+        [data-testid="stSidebar"] * {{
+            color: {sidebar_text} !important;
+        }}
+        [data-testid="stSidebar"] .stRadio [aria-checked="true"] + label {{
+            color: {sidebar_active} !important;
+            font-weight: 600;
+        }}
+        [data-testid="stSidebar"] .stRadio [aria-checked="true"] {{
+            background-color: {sidebar_active_bg};
+        }}
 
+        [data-testid="stMetric"] {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+            border-radius: 10px;
+            padding: 16px;
+        }}
+        [data-testid="stMetricLabel"] {{
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: {text_secondary} !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            font-size: 24px;
+            font-weight: 700;
+            color: {text_primary} !important;
+        }}
 
-# ---------------------------------------------------------------------------
-# Componente: Sidebar (Inserção Manual)
-# ---------------------------------------------------------------------------
-def _render_sidebar() -> None:
-    """Renderiza o formulário de inserção manual de registros na barra lateral."""
-    with st.sidebar:
-        st.header("📝 Lançamento Manual")
-        st.markdown("Insira despesas avulsas diretamente na base de dados.")
-        
-        st.divider()
-        st.subheader("🎨 Tema Visual")
-        tema = st.radio("Escolha o tema:", ["🌙 Escuro", "☀️ Claro"], horizontal=True)
-        if tema == "☀️ Claro":
-            st.markdown("""
-                <style>
-                [data-testid="stAppViewContainer"] { background-color: #FFFFFF; color: #000000; }
-                [data-testid="stSidebar"] { background-color: #F0F2F6; }
-                </style>
-            """, unsafe_allow_html=True)
+        .stMarkdown, p, span, label, .stDataFrame, .stTextInput > div > div > input {{
+            color: {text_primary};
+        }}
+        h1, h2, h3, h4, h5, h6 {{
+            color: {text_primary};
+        }}
+
+        .stSelectbox > div, .stTextInput > div {{
+            border-color: {border} !important;
+            background-color: {card_bg} !important;
+        }}
+
+        .stButton [data-baseweb="button"][kind="primary"] {{
+            background-color: {accent};
+            border-color: {accent};
+        }}
+
+        hr {{ border-color: {border}; opacity: 1; }}
+
+        .st-emotion-cache-1wivap2, .stChatInput {{
+            border-color: {border} !important;
+        }}
+        [data-testid="stChatMessageContent"] {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+            border-radius: 10px;
+            padding: 12px 16px;
+        }}
+        [data-testid="stChatMessageContent"] p {{
+            color: {text_primary};
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# ── 3. Helpers de UI ─────────────────────────────────────────────
+def st_secao(titulo: str):
+    tokens = st.session_state.theme_tokens
+    st.markdown(f"""
+    <h3 style="text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px;
+               font-weight: 600; color: {tokens['text_secondary']};
+               margin-top: 24px; margin-bottom: 8px;">
+        {titulo}
+    </h3>
+    """, unsafe_allow_html=True)
+
+def configurar_grafico_tema(fig: go.Figure) -> go.Figure:
+    tokens = st.session_state.theme_tokens
+    fig.update_layout(
+        plot_bgcolor=tokens["card_bg"],
+        paper_bgcolor=tokens["card_bg"],
+        font_color=tokens["text_primary"],
+        xaxis=dict(gridcolor=tokens["border"]),
+        yaxis=dict(gridcolor=tokens["border"]),
+        title_font_size=16,
+    )
+    return fig
+
+def _fmt_brl(valor: float) -> str:
+    s = f"R$ {valor:,.2f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+# ── 4. Inicialização ─────────────────────────────────────────────
+@st.cache_resource
+def _inicializar():
+    inicializar_banco()
+
+_inicializar()
+
+# ── 5. Sidebar ───────────────────────────────────────────────────
+PAGINAS = [
+    "Painel",
+    "Lançamentos",
+    "Importar",
+    "Conciliação",
+    "Auditoria",
+    "Relatórios",
+    "Assistente",
+]
+
+with st.sidebar:
+    st.markdown("## ContaView")
+    st.divider()
+    pagina = st.radio("Navegação", PAGINAS, label_visibility="collapsed")
+    st.divider()
+    tema_escuro = st.toggle("Modo escuro", key="tema_escuro")
+    st.button("Sair", on_click=auth.logout)
+
+aplicar_tema(st.session_state.get("tema_escuro", False))
+st.title(pagina)
+
+# ── 6. Helpers de filtro ─────────────────────────────────────────
+def _empresa_id_do_filtro() -> int | None:
+    return st.session_state.get("_empresa_id")
+
+def _periodo_do_filtro() -> str | None:
+    val = st.session_state.get("periodo_selecionado", "Todos")
+    return None if val == "Todos" else val
+
+# ── 7. Filtros globais ───────────────────────────────────────────
+exibe_filtros = pagina in ("Painel", "Lançamentos", "Relatórios", "Assistente")
+if exibe_filtros:
+    empresas_df = listar_empresas()
+    if not empresas_df.empty:
+        opcoes_emp = ["Todas"] + empresas_df["nome"].tolist()
+        col_emp, col_per, _ = st.columns([2, 2, 4])
+        with col_emp:
+            st.selectbox("Empresa", opcoes_emp, key="empresa_selecionada")
+        with col_per:
+            emp_atual = st.session_state.empresa_selecionada
+            if emp_atual == "Todas":
+                periodos = listar_periodos()
+                st.session_state._empresa_id = None
+            else:
+                row = empresas_df.loc[empresas_df["nome"] == emp_atual]
+                st.session_state._empresa_id = int(row["id"].iloc[0])
+                periodos = listar_periodos(st.session_state._empresa_id)
+            opcoes_per = ["Todos"] + (periodos or [])
+            if st.session_state.get("periodo_selecionado") not in opcoes_per:
+                st.session_state.periodo_selecionado = "Todos"
+            st.selectbox("Período", opcoes_per, key="periodo_selecionado")
+    else:
+        empresas_df = pd.DataFrame()
+        st.info("Nenhuma empresa cadastrada.")
+else:
+    empresas_df = pd.DataFrame()
+
+# ──────────────────────────────────────────────────────────────────
+# PÁGINAS
+# ──────────────────────────────────────────────────────────────────
+
+# ── Painel ─────────────────────────────────────────────────────
+if pagina == "Painel":
+    if empresas_df.empty:
+        st.info("Nenhum lançamento encontrado.")
+    else:
+        df = carregar_lancamentos(_empresa_id_do_filtro(), _periodo_do_filtro())
+        if df.empty:
+            st.info("Nenhum lançamento encontrado para os filtros selecionados.")
         else:
-            st.markdown("""
-                <style>
-                [data-testid="stAppViewContainer"] { background-color: #0E1117; color: #FAFAFA; }
-                [data-testid="stSidebar"] { background-color: #262730; }
-                </style>
-            """, unsafe_allow_html=True)
-        
-        st.divider()
+            total_creditos = df[df["tipo"] == "C"]["valor"].sum()
+            total_debitos = df[df["tipo"] == "D"]["valor"].sum()
+            saldo = total_creditos - total_debitos
 
-        with st.form("form_registro_manual", clear_on_submit=True):
-            campo_data = st.date_input("Data do Gasto", value=date.today())
-            campo_categoria = st.selectbox("Categoria", options=CATEGORIAS)
-            campo_valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f")
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric("TOTAL DÉBITOS", _fmt_brl(total_debitos))
+            mc2.metric("TOTAL CRÉDITOS", _fmt_brl(total_creditos))
+            mc3.metric("SALDO", _fmt_brl(saldo))
 
-            botao_submeter = st.form_submit_button("Gravar Registro")
+            st.divider()
 
-            if botao_submeter:
-                if campo_valor <= 0:
-                    st.error("O valor do gasto deve ser maior que R$ 0,00.")
-                    return
+            df_plot = df.copy()
+            df_plot["mes"] = pd.to_datetime(df_plot["data"]).dt.to_period("M").astype(str)
+            evol = df_plot.groupby(["mes", "tipo"])["valor"].sum().reset_index()
 
-                sucesso = salvar_registro(
-                    data_val=campo_data,
-                    categoria=campo_categoria,
-                    valor_val=campo_valor,
-                    origem="manual",
+            tokens = st.session_state.theme_tokens
+            fig1 = px.bar(
+                evol, x="mes", y="valor", color="tipo", barmode="group",
+                title="Evolução Mensal — Débitos vs Créditos",
+                color_discrete_map={"C": tokens["positive"], "D": tokens["negative"]},
+                labels={"mes": "Mês", "valor": "Valor (R$)", "tipo": "Tipo"},
+            )
+            fig1.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(configurar_grafico_tema(fig1), use_container_width=True)
+
+            top = (
+                df_plot.groupby("conta_contabil")["valor"]
+                .agg(lambda s: s.abs().sum())
+                .sort_values(ascending=False)
+                .head(10)
+                .reset_index()
+            )
+            top.columns = ["conta_contabil", "volume"]
+
+            fig2 = px.bar(
+                top, x="volume", y="conta_contabil", orientation="h",
+                title="Top 10 Contas por Volume Movimentado",
+                labels={"volume": "Volume (R$)", "conta_contabil": "Conta Contábil"},
+            ).update_traces(marker_color=tokens["accent"])
+            fig2.update_layout(yaxis={"categoryorder": "total ascending"})
+            st.plotly_chart(configurar_grafico_tema(fig2), use_container_width=True)
+
+# ── Lançamentos ────────────────────────────────────────────────
+elif pagina == "Lançamentos":
+    if empresas_df.empty:
+        st.info("Nenhum lançamento encontrado.")
+    else:
+        df = carregar_lancamentos(_empresa_id_do_filtro(), _periodo_do_filtro())
+        if df.empty:
+            st.info("Nenhum lançamento encontrado para os filtros selecionados.")
+        else:
+            def _cor_tipo(val):
+                tokens = st.session_state.theme_tokens
+                if val == "C":
+                    return f"color: {tokens['positive']}; font-weight: 600"
+                if val == "D":
+                    return f"color: {tokens['negative']}; font-weight: 600"
+                return ""
+
+            styled = df.style.applymap(_cor_tipo, subset=["tipo"])
+            st.dataframe(
+                styled,
+                column_config={
+                    "data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                    "conta_contabil": "Conta Contábil",
+                    "valor": st.column_config.NumberColumn("Valor", format="R$ ,.2f"),
+                    "tipo": st.column_config.TextColumn("Tipo", help="C = Crédito, D = Débito"),
+                    "historico": "Histórico",
+                    "filial": "Filial",
+                },
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.divider()
+            st.download_button(
+                label="Exportar para Excel",
+                data=relatorios.exportar_excel(df, "Relatório de Lançamentos"),
+                file_name=f"lancamentos_{st.session_state.get('empresa_selecionada', 'todas')}_{st.session_state.get('periodo_selecionado', 'todos')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+# ── Importar ─────────────────────────────────────────────────────
+elif pagina == "Importar":
+    pendente = st.session_state.get("import_pendente")
+    import_concluido = st.session_state.get("import_concluido")
+
+    if pendente:
+        st.warning(
+            f"Já existem lançamentos para esta empresa no período "
+            f"**{pendente['periodo']}**. Deseja substituir?"
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Substituir período", type="primary"):
+                with st.spinner("Substituindo lançamentos..."):
+                    resultado = importacao.confirmar_substituicao(
+                        pendente["empresa_id"],
+                        pendente["periodo"],
+                        pendente["df"],
+                    )
+                if resultado["sucesso"]:
+                    st.success(
+                        f"{resultado['registros_salvos']} lançamentos importados "
+                        f"com sucesso (período substituído)."
+                    )
+                else:
+                    st.error(resultado.get("erro", "Erro ao substituir período."))
+                st.session_state.import_pendente = None
+                st.rerun()
+        with col2:
+            if st.button("Cancelar"):
+                st.session_state.import_pendente = None
+                st.rerun()
+
+    elif import_concluido:
+        dados = st.session_state.import_dados
+
+        st.success(
+            f"{dados['registros_salvos']} lançamentos importados com sucesso."
+        )
+
+        if dados.get("ocorrencias"):
+            resumo = auditoria.resumo_auditoria(dados["ocorrencias"])
+            if resumo["alta"] > 0:
+                st.error(f"{resumo['alta']} ocorrência(s) de alta severidade.")
+            if resumo["media"] > 0:
+                st.warning(f"{resumo['media']} ocorrência(s) de média severidade.")
+
+            with st.expander("Detalhes da auditoria"):
+                st.dataframe(
+                    pd.DataFrame(dados["ocorrencias"]),
+                    use_container_width=True,
+                    hide_index=True,
                 )
 
-                if sucesso:
-                    st.success("Registro manual salvo com sucesso!")
-                    _atualizar_dados_sessao()
-                else:
-                    st.error("Erro crítico ao tentar persistir o registro no banco.")
+        if dados.get("conciliacao"):
+            conc = dados["conciliacao"]
+            with st.expander("Resultado da conciliação"):
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.metric("TOTAL DE PARES", conc["pares_ok"] + conc["sem_par"])
+                mc2.metric("PARES OK", conc["pares_ok"])
+                mc3.metric("SEM PAR", conc["sem_par"])
 
+                if not conc["df_pares"].empty:
+                    st_secao("PARES CONCILIADOS")
+                    st.dataframe(conc["df_pares"], use_container_width=True, hide_index=True)
+                if not conc["df_sem_par"].empty:
+                    st_secao("LANÇAMENTOS SEM PAR")
+                    st.dataframe(conc["df_sem_par"], use_container_width=True, hide_index=True)
 
-# ---------------------------------------------------------------------------
-# Aba 1: Ingestão e Upload de Arquivos
-# ---------------------------------------------------------------------------
-def _render_upload() -> None:
-    """Renderiza a área de arrastar arquivos e gerencia o pipeline de parsing/bulk insert."""
-    st.header("📂 Upload Multifonte")
-    st.markdown(
-        "Suporta arquivos desestruturados ou tabulares: **Excel (.xlsx), CSV, PDF e PowerPoint (.pptx)**. "
-        "O sistema irá aplicar as estratégias em cascata automaticamente."
-    )
+        if st.button("Nova importação"):
+            st.session_state.import_concluido = False
+            st.rerun()
 
-    arquivos_enviados = st.file_uploader(
-        "Selecione um ou mais arquivos para processamento",
-        type=["xlsx", "xls", "csv", "pdf", "pptx"],
-        accept_multiple_files=True,
-    )
-
-    if not arquivos_enviados:
-        st.info("Aguardando upload de arquivos para iniciar o motor de parsing.")
-        return
-
-    st.subheader("⚙️ Status do Processamento em Lote")
-
-    for arquivo in arquivos_enviados:
-        with st.expander(f"📄 Arquivo: {arquivo.name}", expanded=True):
-            try:
-                # 1. Aciona o dispatcher estratégico em parsers.py
-                df_processado, tipo_origem = processar_arquivo(arquivo)
-
-                if df_processado.empty:
-                    st.warning("O arquivo foi lido, mas nenhuma linha válida foi estruturada pelo motor.")
-                    continue
-
-                st.markdown(f"**Estratégia aplicada:** Ingestor nativo para `{tipo_origem.upper()}`")
-                st.dataframe(df_processado.head(5), use_container_width=True)
-
-                # Colunas para ações de confirmação
-                col_info, col_acao = st.columns([3, 1])
-                col_info.caption(f"Total de linhas identificadas para ingestão: {len(df_processado)}")
-
-                # Botão único por arquivo para disparar o Bulk Insert seguro
-                if col_acao.button("Confirmar Carga no Banco", key=f"btn_{arquivo.name}"):
-                    with st.spinner("Persistindo lote de dados de forma atômica..."):
-                        # Chamada da nova função vetorizada e otimizada
-                        linhas_salvas = salvar_dataframe_otimizado(df_processado, origem=tipo_origem)
-
-                    if linhas_salvas > 0:
-                        st.success(f"Sucesso! {linhas_salvas} registros foram gravados em lote.")
-                        _atualizar_dados_sessao()
-                    else:
-                        st.error("A carga falhou. Verifique se o formato dos campos está correto nos logs.")
-
-            except Exception as exc:
-                logger.error(f"Falha de processamento no arquivo {arquivo.name}: {exc}", exc_info=True)
-                st.error(f"Erro ao processar arquivo: {type(exc).__name__} - {str(exc)}")
-
-
-# ---------------------------------------------------------------------------
-# Aba 1.5: Comprovante por Foto (OCR)
-# ---------------------------------------------------------------------------
-def _render_comprovante_foto() -> None:
-    """Renderiza a interface para upload ou captura de foto de comprovante usando OCR."""
-    st.header("📷 Leitura de Comprovante (IA)")
-    st.markdown("Envie ou tire uma foto do seu comprovante fiscal para extração automática de dados contábeis.")
-
-    opcao = st.radio("Como deseja enviar o comprovante?", ["Fazer Upload de Arquivo", "Tirar Foto na Hora"], horizontal=True)
-    imagem_bytes = None
-
-    if opcao == "Fazer Upload de Arquivo":
-        arquivo = st.file_uploader("Selecione a imagem do comprovante", type=["png", "jpg", "jpeg"])
-        if arquivo:
-            imagem_bytes = arquivo.read()
-            st.image(imagem_bytes, caption="Pré-visualização do Comprovante", width=350)
     else:
-        foto = st.camera_input("Tire uma foto do comprovante usando a câmera")
-        if foto:
-            imagem_bytes = foto.read()
+        nome_empresa = st.text_input("Nome da empresa", key="imp_nome")
+        cnpj_empresa = st.text_input("CNPJ (opcional)", key="imp_cnpj")
 
-    if imagem_bytes:
-        if st.button("Escanear Comprovante com IA", type="primary"):
-            with st.spinner("Processando imagem via OCR (pode levar alguns segundos)..."):
-                resultado = extrair_dados_comprovante_imagem(imagem_bytes)
-            
-            if resultado:
-                st.success("Leitura concluída! Revise os dados abaixo antes de salvar.")
-                
-                with st.form("form_comprovante_ocr", clear_on_submit=True):
-                    try:
-                        data_padrao = datetime.strptime(resultado.get("data", ""), "%Y-%m-%d").date() if resultado.get("data") else date.today()
-                    except ValueError:
-                        try:
-                            data_padrao = datetime.strptime(resultado.get("data", ""), "%d/%m/%Y").date() if resultado.get("data") else date.today()
-                        except ValueError:
-                            data_padrao = date.today()
+        arquivo = st.file_uploader(
+            "Arquivo (.xlsx, .csv)", type=["xlsx", "csv"], key="imp_arquivo"
+        )
 
-                    campo_data = st.date_input("Data do Gasto", value=data_padrao)
-                    
-                    valor_ext = resultado.get("valor") or 0.0
-                    campo_valor = st.number_input("Valor Total (R$)", min_value=0.0, value=float(valor_ext), step=10.0, format="%.2f")
-                    
-                    hora_ext = resultado.get("hora") or ""
-                    if hora_ext:
-                        st.info(f"Hora identificada no comprovante: {hora_ext}")
+        if st.button("Importar", type="primary", disabled=not (arquivo and nome_empresa)):
+            with st.spinner("Processando arquivo..."):
+                resultado = importacao.executar_importacao(
+                    arquivo,
+                    nome_empresa.strip(),
+                    (cnpj_empresa or "").strip() or None,
+                )
 
-                    st.text_area("Texto Bruto Extraído (Referência OCR)", value=resultado.get("texto_extraido", ""), disabled=True, height=100)
-                    
-                    if st.form_submit_button("Confirmar e Salvar no Banco"):
-                        if campo_valor <= 0:
-                            st.error("O valor do gasto deve ser maior que R$ 0,00.")
-                        else:
-                            sucesso = salvar_registro(
-                                data_val=campo_data,
-                                categoria="Comprovante (OCR Foto)",
-                                valor_val=campo_valor,
-                                origem="ocr_camera"
-                            )
-                            if sucesso:
-                                st.success("Comprovante salvo com sucesso!")
-                                _atualizar_dados_sessao()
-                            else:
-                                st.error("Erro crítico ao gravar no banco de dados.")
+            if resultado.get("requer_confirmacao"):
+                st.session_state.import_pendente = {
+                    "empresa_id": resultado["empresa_id"],
+                    "periodo": resultado["periodo"],
+                    "df": resultado["df"],
+                }
+                st.rerun()
+
+            elif resultado.get("sucesso"):
+                df = resultado["df"]
+                empresa_id = resultado["empresa_id"]
+                periodo = resultado["periodo"]
+
+                ocorrencias = auditoria.auditar_lancamentos(df)
+                if ocorrencias:
+                    auditoria.salvar_ocorrencias(ocorrencias, empresa_id)
+
+                conc_result = conciliacao.conciliar_partidas(df)
+                conciliacao.salvar_resultado_conciliacao(empresa_id, periodo, conc_result)
+
+                st.session_state.import_dados = {
+                    "registros_salvos": resultado["registros_salvos"],
+                    "ocorrencias": ocorrencias,
+                    "conciliacao": conc_result,
+                }
+                st.session_state.import_concluido = True
+                st.rerun()
+
             else:
-                st.warning("A IA não conseguiu identificar os dados financeiros. Tente uma foto mais nítida.")
+                st.error(resultado.get("erro", "Erro desconhecido."))
 
+# ── Conciliação ──────────────────────────────────────────────────
+elif pagina == "Conciliação":
+    empresas_df = listar_empresas()
+    if empresas_df.empty:
+        st.info("Nenhuma empresa cadastrada. Importe lançamentos primeiro.")
+    else:
+        opcoes_emp = {str(row["nome"]): row["id"] for _, row in empresas_df.iterrows()}
+        emp_selecionada = st.selectbox("Empresa", list(opcoes_emp.keys()), key="con_emp")
+        empresa_id = opcoes_emp[emp_selecionada]
 
-# ---------------------------------------------------------------------------
-# Aba 2: Exibição de Dados (Tabelas)
-# ---------------------------------------------------------------------------
-def _render_dados(df: pd.DataFrame) -> None:
-    """Exibe os dados históricos do banco com filtros interativos em tempo real."""
-    st.header("🗃️ Registro Histórico Unificado")
+        periodos = listar_periodos(empresa_id)
+        if not periodos:
+            st.info("Nenhum período encontrado para esta empresa.")
+        else:
+            periodo = st.selectbox("Período", periodos, key="con_per")
 
-    if df.empty:
-        st.info("Nenhum dado encontrado no banco de dados. Use a barra lateral ou faça um upload.")
-        return
+            df_lanc = carregar_lancamentos(empresa_id, periodo)
+            if df_lanc.empty:
+                st.info("Nenhum lançamento encontrado para este período.")
+            else:
+                resultado = conciliacao.conciliar_partidas(df_lanc)
 
-    # Filtro dinâmico por categoria na interface
-    categorias_disponiveis = ["Todas"] + sorted(df["categoria"].unique().tolist())
-    filtro_cat = st.selectbox("Filtrar visualização por Categoria:", categorias_disponiveis)
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.metric("TOTAL DE PARES", resultado["pares_ok"] + resultado["sem_par"])
+                mc2.metric("PARES OK", resultado["pares_ok"])
+                mc3.metric("SEM PAR", resultado["sem_par"])
 
-    df_filtrado = df if filtro_cat == "Todas" else df[df["categoria"] == filtro_cat]
+                st.divider()
 
-    st.dataframe(
-        df_filtrado.rename(columns={
-            "id": "ID",
-            "data": "Data",
-            "categoria": "Categoria",
-            "valor": "Valor (R$)",
-            "origem": "Origem",
-            "criado_em": "Registrado em",
-        }),
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Valor (R$)": st.column_config.NumberColumn(format="R$ %.2f"),
-            "Data": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        },
-    )
-    st.caption(f"Exibindo {len(df_filtrado)} de {len(df)} registros encontrados no SQLite.")
+                if not resultado["df_pares"].empty:
+                    st_secao("PARES CONCILIADOS")
+                    st.dataframe(resultado["df_pares"], use_container_width=True, hide_index=True)
+                if not resultado["df_sem_par"].empty:
+                    st_secao("LANÇAMENTOS SEM PAR")
+                    st.dataframe(resultado["df_sem_par"], use_container_width=True, hide_index=True)
 
+                st.divider()
+                df_relatorio = conciliacao.gerar_relatorio_conciliacao(resultado)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="Exportar para Excel",
+                        data=relatorios.exportar_excel(df_relatorio, "Relatório de Conciliação"),
+                        file_name=f"conciliacao_{emp_selecionada}_{periodo}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                with col2:
+                    st.download_button(
+                        label="Exportar para PDF",
+                        data=relatorios.exportar_pdf(
+                            {"df_relatorio": df_relatorio}, "conciliacao", emp_selecionada, periodo
+                        ),
+                        file_name=f"conciliacao_{emp_selecionada}_{periodo}.pdf",
+                        mime="application/pdf",
+                    )
 
-# ---------------------------------------------------------------------------
-# Aba 3: Inteligência de Negócio (Gráficos e KPIs)
-# ---------------------------------------------------------------------------
-def _render_analise(df: pd.DataFrame) -> None:
-    """Gera blocos de métricas e gráficos analíticos interativos usando Plotly."""
-    st.header("📊 Métricas Consolidadas")
+# ── Auditoria ────────────────────────────────────────────────────
+elif pagina == "Auditoria":
+    empresas_df = listar_empresas()
+    if empresas_df.empty:
+        st.info("Nenhuma empresa cadastrada. Importe lançamentos primeiro.")
+    else:
+        opcoes_emp = {str(row["nome"]): row["id"] for _, row in empresas_df.iterrows()}
+        emp_selecionada = st.selectbox("Empresa", list(opcoes_emp.keys()), key="aud_emp")
+        empresa_id = opcoes_emp[emp_selecionada]
 
-    if df.empty:
-        st.info("Insira dados para habilitar os painéis de inteligência gráfica.")
-        return
+        periodos = listar_periodos(empresa_id)
+        if not periodos:
+            st.info("Nenhum período encontrado para esta empresa.")
+        else:
+            periodo = st.selectbox("Período", periodos, key="aud_per")
 
-    # 1. Cálculo de cartões de KPI básicos
-    total_gasto = df["valor"].sum()
-    total_registros = len(df)
-    media_gasto = df["valor"].mean()
-    maior_gasto = df["valor"].max()
+            df_oc = carregar_ocorrencias(empresa_id, periodo)
+            if df_oc.empty:
+                st.info("Nenhuma ocorrência de auditoria para este período.")
+            else:
+                alta = len(df_oc[df_oc["severidade"] == "alta"])
+                media = len(df_oc[df_oc["severidade"] == "media"])
+                baixa = len(df_oc[df_oc["severidade"] == "baixa"])
 
-    kpi_tot, kpi_qtd, kpi_med, kpi_max = st.columns(4)
-    kpi_tot.metric("Gasto Acumulado Total", f"R$ {total_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    kpi_qtd.metric("Volume de Registros", f"{total_registros} itens")
-    kpi_med.metric("Ticket Médio por Linha", f"R$ {media_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-    kpi_max.metric("Maior Despesa Isolada", f"R$ {maior_gasto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.metric("ALTA", alta)
+                mc2.metric("MÉDIA", media)
+                mc3.metric("BAIXA", baixa)
 
-    st.markdown("---")
+                st.divider()
 
-    # 2. Geração de Gráficos de Distribuição
-    graf_col1, graf_col2 = st.columns(2)
+                cols_exibir = ["tipo_ocorrencia", "descricao", "severidade", "resolvida"]
+                cols_exibir = [c for c in cols_exibir if c in df_oc.columns]
+                df_exibir = df_oc[cols_exibir].copy()
 
-    with graf_col1:
-        st.subheader("Despesas por Categoria")
-        df_cat = df.groupby("categoria", as_index=False)["valor"].sum()
-        fig_pizza = px.pie(
-            df_cat,
-            names="categoria",
-            values="valor",
-            hole=0.4,
-            color_discrete_sequence=px.colors.qualitative.Safe,
-        )
-        fig_pizza.update_traces(textinfo="percent+label")
-        st.plotly_chart(fig_pizza, use_container_width=True)
+                edited = st.data_editor(
+                    df_exibir,
+                    column_config={
+                        "resolvida": st.column_config.CheckboxColumn("Resolvida"),
+                    },
+                    disabled=[c for c in cols_exibir if c != "resolvida"],
+                    hide_index=True,
+                    use_container_width=True,
+                    key="aud_editor",
+                )
 
-    with graf_col2:
-        st.subheader("Evolução Cronológica dos Gastos")
-        # Agrupa por data para montar o gráfico de linha de tendência temporal
-        df_tempo = df.groupby("data", as_index=False)["valor"].sum().sort_values("data")
-        fig_linha = px.line(
-            df_tempo,
-            x="data",
-            y="valor",
-            labels={"data": "Linha do Tempo", "valor": "Montante Diário (R$)"},
-            markers=True,
-            color_discrete_sequence=["#2E7D32"],
-        )
-        st.plotly_chart(fig_linha, use_container_width=True)
+                if st.button("Salvar alterações"):
+                    alteradas = edited[edited["resolvida"] != df_exibir["resolvida"]]
+                    for idx in alteradas.index:
+                        oc_id = df_oc.iloc[idx]["id"]
+                        atualizar_ocorrencia_resolvida(int(oc_id), bool(edited.loc[idx, "resolvida"]))
+                    if not alteradas.empty:
+                        st.success(f"{len(alteradas)} ocorrência(s) atualizada(s).")
+                        st.rerun()
+                    else:
+                        st.info("Nenhuma alteração detectada.")
 
+                st.divider()
+                st.download_button(
+                    label="Exportar para Excel",
+                    data=relatorios.exportar_excel(df_oc, "Relatório de Auditoria"),
+                    file_name=f"auditoria_{emp_selecionada}_{periodo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
-# ---------------------------------------------------------------------------
-# Entry point da aplicação
-# ---------------------------------------------------------------------------
-def main() -> None:
-    """Ponto de entrada principal da arquitetura do aplicativo Streamlit."""
-    _init_session()
+# ── Relatórios ───────────────────────────────────────────────────
+elif pagina == "Relatórios":
+    st.info("Selecione uma empresa e período para gerar os relatórios.")
 
-    st.title("💰 Dashboard de Ingestão Multifonte & Persistência")
-    st.caption("Pipeline de Dados Unificado · Persistência Segura SQLite · Otimização em Lote")
+    empresa_id = _empresa_id_do_filtro()
+    periodo = _periodo_do_filtro()
+    empresa_nome = st.session_state.get("empresa_selecionada", "Todas")
 
-    # Renderiza o painel de gravação manual à esquerda
-    _render_sidebar()
+    if empresa_id and periodo:
+        st.divider()
+        st_secao("RELATÓRIO DE LANÇAMENTOS")
+        st.markdown("Exporta todos os lançamentos do período selecionado em formato Excel.")
+        df_lanc = carregar_lancamentos(empresa_id, periodo)
+        if not df_lanc.empty:
+            st.download_button(
+                label="Gerar Excel de Lançamentos",
+                data=relatorios.exportar_excel(df_lanc, "Relatório de Lançamentos"),
+                file_name=f"lancamentos_{empresa_nome}_{periodo}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        else:
+            st.warning("Nenhum lançamento encontrado para este período.")
 
-    # Cria as abas de navegação da interface de usuário
-    tab_upload, tab_foto, tab_dados, tab_analise = st.tabs([
-        "📂 Upload em Lote", 
-        "📷 Comprovante (Foto)", 
-        "🗃️ Dados Cadastrados", 
-        "📊 Análise de Performance"
-    ])
+        st.divider()
+        st_secao("RELATÓRIO DE CONCILIAÇÃO")
+        st.markdown("Gera um relatório detalhado com pares conciliados e lançamentos sem par.")
+        resultado_conc = conciliacao.conciliar_partidas(df_lanc)
+        df_relatorio_conc = conciliacao.gerar_relatorio_conciliacao(resultado_conc)
+        if not df_relatorio_conc.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="Gerar Excel de Conciliação",
+                    data=relatorios.exportar_excel(df_relatorio_conc, "Relatório de Conciliação"),
+                    file_name=f"conciliacao_{empresa_nome}_{periodo}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            with col2:
+                st.download_button(
+                    label="Gerar PDF de Conciliação",
+                    data=relatorios.exportar_pdf(
+                        {"df_relatorio": df_relatorio_conc}, "conciliacao", empresa_nome, periodo
+                    ),
+                    file_name=f"conciliacao_{empresa_nome}_{periodo}.pdf",
+                    mime="application/pdf",
+                )
 
-    # Captura o estado atualizado da memória para distribuir nas views
-    df_atual = st.session_state.db_financeiro
+        st.divider()
+        st_secao("RELATÓRIO DE AUDITORIA")
+        st.markdown("Exporta todas as ocorrências de auditoria encontradas para o período.")
+        df_oc = carregar_ocorrencias(empresa_id, periodo)
+        if not df_oc.empty:
+            st.download_button(
+                label="Gerar Excel de Auditoria",
+                data=relatorios.exportar_excel(df_oc, "Relatório de Auditoria"),
+                file_name=f"auditoria_{empresa_nome}_{periodo}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        else:
+            st.info("Nenhuma ocorrência de auditoria para este período.")
 
-    with tab_upload:
-        _render_upload()
+# ── Assistente ───────────────────────────────────────────────────
+elif pagina == "Assistente":
+    if empresas_df.empty:
+        st.info("Nenhuma empresa cadastrada. Importe lançamentos primeiro.")
+    else:
+        empresa_id = _empresa_id_do_filtro()
+        periodo = _periodo_do_filtro()
+        empresa_nome = st.session_state.get("empresa_selecionada", "Todas")
 
-    with tab_foto:
-        _render_comprovante_foto()
+        if not empresa_id or not periodo:
+            st.info("Selecione uma empresa e um período para conversar com o assistente.")
+        else:
+            st.divider()
 
-    with tab_dados:
-        _render_dados(df_atual)
+            # Inicializa histórico
+            if "historico_chat" not in st.session_state:
+                st.session_state.historico_chat = []
 
-    with tab_analise:
-        _render_analise(df_atual)
+            # Gera ou recupera o contexto resumido
+            if "contexto_assistente" not in st.session_state:
+                with st.spinner("Preparando contexto dos dados..."):
+                    st.session_state.contexto_assistente = assistente.montar_contexto_resumido(
+                        empresa_id, periodo, empresa_nome
+                    )
 
+            # Exibe o contexto em um expander
+            with st.expander("Contexto enviado ao assistente"):
+                st.text(st.session_state.contexto_assistente)
 
-if __name__ == "__main__":
-    main()
+            st.divider()
+
+            # Botão de limpar conversa
+            col_msg, col_btn = st.columns([4, 1])
+            with col_btn:
+                if st.button("Limpar conversa", use_container_width=True):
+                    st.session_state.historico_chat = []
+                    st.session_state.contexto_assistente = assistente.montar_contexto_resumido(
+                        empresa_id, periodo, empresa_nome
+                    )
+                    st.rerun()
+
+            with col_msg:
+                st.markdown(f"**Assistente ContaView — {empresa_nome} / {periodo}**")
+
+            # Exibe histórico
+            for msg in st.session_state.historico_chat:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Campo de entrada
+            pergunta = st.chat_input("Pergunte sobre os dados...")
+            if pergunta:
+                st.session_state.historico_chat.append({"role": "user", "content": pergunta})
+
+                with st.chat_message("user"):
+                    st.markdown(pergunta)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Consultando assistente..."):
+                        resposta = assistente.perguntar_ao_assistente(
+                            pergunta,
+                            st.session_state.contexto_assistente,
+                            st.session_state.historico_chat[:-1],
+                        )
+                    st.markdown(resposta)
+
+                st.session_state.historico_chat.append({"role": "assistant", "content": resposta})
+                st.rerun()
+
+# ── Fallback ─────────────────────────────────────────────────────
+else:
+    st.info("Módulo em construção.")

@@ -7,7 +7,6 @@ Focado em alta performance (Bulk Insert) e segurança para dados contábeis.
 
 import os
 import logging
-from datetime import date, datetime
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Gerenciamento Seguro de Conexão (Hardening via Environment Variables)
 # ---------------------------------------------------------------------------
 def get_database_url() -> str:
+    """Obtém a URL do banco de dados de forma segura."""
     # 1. Tenta pegar do st.secrets (Streamlit Cloud)
     try:
         import streamlit as st
@@ -38,9 +38,9 @@ def get_database_url() -> str:
     if url:
         return url
 
-    # 3. Fallback (Pode estar pausado se for projeto gratuito no Supabase)
-    logger.warning("Variável DATABASE_URL não encontrada. Usando string de conexão de fallback (Supabase).")
-    return "postgresql://postgres:NCu4WNpF0SQXLaJc@db.ylxdlhthcocznmwajbfy.supabase.co:6543/postgres"
+    # 3. Fallback
+    logger.warning("Variável DATABASE_URL não encontrada. Verifique o .env ou secrets.")
+    return "postgresql://user:password@host:port/database"
 
 DATABASE_URL = get_database_url()
 
@@ -49,153 +49,324 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O POOLER DO SUPABASE (PORTA 6543 / IPv4)
-# - pool_size e max_overflow: controlam a concorrência dentro do limite do plano.
-# - pool_recycle: Fecha conexões ociosas a cada 30 min, evitando a queda do pooler.
-# - pool_pre_ping: Garante resiliência testando a conexão antes de executar o SQL.
-# - connect_args: SSL mode 'require' obrigatório para tráfego cloud.
 engine = create_engine(
     DATABASE_URL,
     pool_size=5,
     max_overflow=10,
     pool_recycle=1800,
     pool_pre_ping=True,
-    connect_args={"sslmode": "require"}
+    connect_args={"sslmode": "require"} if 'supabase' in DATABASE_URL else {}
 )
 
-SENTINEL: str = "NÃO ENCONTRADO"
 
-# Schema adaptado para PostgreSQL (com tipos de dados nativos mais eficientes)
-DDL_GASTOS_POSTGRES = """
-CREATE TABLE IF NOT EXISTS gastos (
-    id          SERIAL PRIMARY KEY,
-    data        DATE NOT NULL,
-    categoria   VARCHAR(100) NOT NULL,
-    valor       NUMERIC(12, 2) NOT NULL,
-    origem      VARCHAR(50) NOT NULL DEFAULT 'manual',
-    criado_em   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+# Schema completo do banco de dados ContaView
+DDL = """
+CREATE TABLE IF NOT EXISTS empresas (
+   id SERIAL PRIMARY KEY,
+   nome VARCHAR(200) NOT NULL UNIQUE,
+   cnpj VARCHAR(18),
+   ativa BOOLEAN NOT NULL DEFAULT TRUE,
+   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_gastos_data ON gastos(data);
-CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria);
+
+CREATE TABLE IF NOT EXISTS lancamentos (
+   id SERIAL PRIMARY KEY,
+   empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+   data DATE NOT NULL,
+   conta_contabil VARCHAR(50) NOT NULL,
+   valor NUMERIC(14, 2) NOT NULL,
+   tipo CHAR(1) NOT NULL CHECK (tipo IN ('C', 'D')),
+   historico TEXT,
+   filial VARCHAR(20),
+   periodo VARCHAR(7),
+   sequencial_lote INTEGER,
+   origem VARCHAR(50) NOT NULL DEFAULT 'arquivo',
+   arquivo_origem VARCHAR(255),
+   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS conciliacoes (
+   id SERIAL PRIMARY KEY,
+   empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+   periodo VARCHAR(7) NOT NULL,
+   total_pares INTEGER NOT NULL DEFAULT 0,
+   pares_ok INTEGER NOT NULL DEFAULT 0,
+   pares_com_erro INTEGER NOT NULL DEFAULT 0,
+   status VARCHAR(20) NOT NULL DEFAULT 'pendente',
+   executado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ocorrencias_auditoria (
+   id SERIAL PRIMARY KEY,
+   empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+   lancamento_id INTEGER REFERENCES lancamentos(id),
+   tipo_ocorrencia VARCHAR(50) NOT NULL,
+   descricao TEXT NOT NULL,
+   severidade VARCHAR(10) NOT NULL DEFAULT 'media',
+   resolvida BOOLEAN NOT NULL DEFAULT FALSE,
+   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índices para otimização de consultas
+CREATE INDEX IF NOT EXISTS idx_lancamentos_empresa ON lancamentos(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_conta ON lancamentos(conta_contabil);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_periodo ON lancamentos(periodo);
+CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo ON lancamentos(tipo);
 """
 
 # ---------------------------------------------------------------------------
 # Inicialização do Banco
 # ---------------------------------------------------------------------------
 def inicializar_banco() -> None:
-    """Garante que a tabela e os índices existam no PostgreSQL remoto."""
+    """Garante que todas as tabelas e índices existam no PostgreSQL."""
     try:
         with engine.begin() as conn:
-            conn.execute(text(DDL_GASTOS_POSTGRES))
-        logger.info("Banco de dados PostgreSQL/SQLAlchemy inicializado com sucesso.")
+            conn.execute(text(DDL))
+        logger.info("Banco de dados inicializado com sucesso.")
     except SQLAlchemyError as exc:
         logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
         raise exc
 
 # ---------------------------------------------------------------------------
-# Funções Auxiliares de Normalização
+# Operações de Escrita
 # ---------------------------------------------------------------------------
-def _normalizar_data(d):
-    if pd.isna(d) or d == SENTINEL:
-        return None
+
+def obter_ou_criar_empresa(nome: str, cnpj: str = None) -> int:
+    """Busca uma empresa pelo nome. Se não existir, cria e retorna o ID."""
+    find_sql = text("SELECT id FROM empresas WHERE nome = :nome")
+    insert_sql = text("INSERT INTO empresas (nome, cnpj) VALUES (:nome, :cnpj) RETURNING id")
+
+    with engine.connect() as conn:
+        trans = conn.begin()
+        try:
+            result = conn.execute(find_sql, {"nome": nome}).fetchone()
+            if result:
+                trans.commit()
+                return result[0]
+            
+            new_id = conn.execute(insert_sql, {"nome": nome, "cnpj": cnpj}).scalar_one()
+            trans.commit()
+            logger.info(f"Empresa '{nome}' criada com ID: {new_id}")
+            return new_id
+        except SQLAlchemyError as exc:
+            trans.rollback()
+            logger.error(f"Erro ao obter ou criar empresa '{nome}': {exc}")
+            raise exc
+
+
+def verificar_periodo_existente(empresa_id: int, periodo: str) -> bool:
+    """Verifica se já existem lançamentos para uma empresa em um período."""
+    sql = text("""
+        SELECT EXISTS (
+            SELECT 1 FROM lancamentos WHERE empresa_id = :empresa_id AND periodo = :periodo
+        )
+    """)
     try:
-        return pd.to_datetime(d).date()
-    except Exception:
-        return None
-
-def _normalizar_valor(v) -> float:
-    if pd.isna(v) or v == SENTINEL:
-        return 0.0
-    try:
-        if isinstance(v, str):
-            v = v.replace("R$", "").replace(".", "").replace(",", ".").strip()
-        return round(float(v), 2)
-    except (ValueError, TypeError):
-        return 0.0
-
-# ---------------------------------------------------------------------------
-# Operações de Escrita (Alta Performance Contábil)
-# ---------------------------------------------------------------------------
-def salvar_registro(data_val, categoria: str, valor_val, origem: str = "manual") -> bool:
-    """Salva um único registro manual de forma parametrizada (Anti-SQLi)."""
-    data_clean = _normalizar_data(data_val)
-    valor_clean = _normalizar_valor(valor_val)
-    categoria_clean = str(categoria).strip()[:100]
-
-    if not data_clean or not categoria_clean:
-        return False
-
-    sql = text("INSERT INTO gastos (data, categoria, valor, origem) VALUES (:data, :categoria, :valor, :origem)")
-    try:
-        with engine.begin() as conn:
-            conn.execute(sql, {"data": data_clean, "categoria": categoria_clean, "valor": valor_clean, "origem": origem})
-        return True
+        with engine.connect() as conn:
+            result = conn.execute(sql, {"empresa_id": empresa_id, "periodo": periodo}).scalar()
+            return result
     except SQLAlchemyError as exc:
-        logger.error(f"Erro ao salvar registro individual: {exc}")
+        logger.error(f"Erro ao verificar período {periodo} para empresa {empresa_id}: {exc}")
         return False
 
-def salvar_dataframe_otimizado(df: pd.DataFrame, origem: str = "arquivo") -> int:
-    """
-    BULK INSERT CONTÁBIL DE ALTA PERFORMANCE.
-    Utiliza o método nativo altamente otimizado do Pandas acoplado ao SQLAlchemy
-    para empurrar milhares de linhas de reconciliação de uma vez só para o Postgres.
-    """
+
+def deletar_lancamentos_do_periodo(empresa_id: int, periodo: str) -> int:
+    """Deleta lançamentos, ocorrências de auditoria e conciliações de um período."""
+    delete_ocorrencias_sql = text("""
+        DELETE FROM ocorrencias_auditoria WHERE empresa_id = :empresa_id 
+        AND lancamento_id IN (SELECT id FROM lancamentos WHERE periodo = :periodo AND empresa_id = :empresa_id)
+    """)
+    delete_conciliacoes_sql = text("DELETE FROM conciliacoes WHERE empresa_id = :empresa_id AND periodo = :periodo")
+    delete_lancamentos_sql = text("DELETE FROM lancamentos WHERE empresa_id = :empresa_id AND periodo = :periodo")
+    
+    deleted_count = 0
+    with engine.begin() as conn:
+        try:
+            conn.execute(delete_ocorrencias_sql, {"empresa_id": empresa_id, "periodo": periodo})
+            conn.execute(delete_conciliacoes_sql, {"empresa_id": empresa_id, "periodo": periodo})
+            result = conn.execute(delete_lancamentos_sql, {"empresa_id": empresa_id, "periodo": periodo})
+            deleted_count = result.rowcount
+            logger.info(f"{deleted_count} lançamentos deletados para empresa {empresa_id} no período {periodo}.")
+        except SQLAlchemyError as exc:
+            logger.error(f"Erro ao deletar período {periodo} para empresa {empresa_id}: {exc}")
+            raise exc
+    return deleted_count
+
+
+def salvar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str = 'arquivo') -> int:
+    """Salva um DataFrame de lançamentos contábeis usando to_sql otimizado."""
     if df.empty:
         return 0
 
-    colunas_obrigatorias = ["data", "categoria", "valor"]
-    for col in colunas_obrigatorias:
-        if col not in df.columns:
-            logger.error(f"Coluna obrigatória ausente: {col}")
-            return 0
+    df_insert = df.copy()
+    df_insert['empresa_id'] = empresa_id
+    df_insert['origem'] = origem
 
-    # Preparação veloz dos dados
-    df_clean = df.copy()
-    df_clean["data"] = df_clean["data"].apply(_normalizar_data)
-    df_clean["valor"] = df_clean["valor"].apply(_normalizar_valor)
-    df_clean["categoria"] = df_clean["categoria"].astype(str).str.strip().str[:100]
-    df_clean["origem"] = str(origem)
-
-    # Remove registros inválidos antes de enviar à nuvem para poupar banda e processamento
-    df_filtrado = df_clean[df_clean["data"].notna() & (df_clean["categoria"] != "")]
-    
-    if df_filtrado.empty:
-        return 0
-
-    # Seleciona apenas as colunas que batem com o banco de dados
-    df_final = df_filtrado[["data", "categoria", "valor", "origem"]]
+    # Garante que as colunas estão na ordem correta da tabela
+    colunas_tabela = [
+        'empresa_id', 'data', 'conta_contabil', 'valor', 'tipo', 'historico', 
+        'filial', 'periodo', 'sequencial_lote', 'origem', 'arquivo_origem'
+    ]
+    df_insert = df_insert[colunas_tabela]
 
     try:
-        # O 'to_sql' com a engine do SQLAlchemy realiza a inserção em blocos na nuvem de forma atômica
         with engine.begin() as conn:
-            df_final.to_sql(
-                name="gastos",
+            registros_salvos = df_insert.to_sql(
+                name="lancamentos",
                 con=conn,
                 if_exists="append",
                 index=False,
-                method="multi", # Agrupa múltiplas linhas por comando INSERT (Velocidade Máxima)
-                chunksize=1000  # Envia de 1000 em 1000 linhas por bloco
+                method="multi",
+                chunksize=1000
             )
-        return len(df_final)
+        logger.info(f"{registros_salvos} lançamentos salvos com sucesso para empresa {empresa_id}.")
+        return registros_salvos if registros_salvos is not None else 0
     except SQLAlchemyError as exc:
-        logger.error(f"Falha crítica no Bulk Insert contábil: {exc}")
+        logger.error(f"Falha no bulk insert para empresa {empresa_id}: {exc}")
         return 0
 
 # ---------------------------------------------------------------------------
 # Operações de Leitura
 # ---------------------------------------------------------------------------
-def carregar_todos_os_gastos() -> pd.DataFrame:
-    """Carrega todo o histórico contábil do PostgreSQL para análise no Streamlit."""
-    sql = text("SELECT id, data, categoria, valor, origem, criado_em FROM gastos ORDER BY data DESC, id DESC")
+
+# ---------------------------------------------------------------------------
+# Operações — Conciliação
+# ---------------------------------------------------------------------------
+
+def inserir_conciliacao(empresa_id: int, periodo: str, total_pares: int, pares_ok: int, pares_com_erro: int) -> int:
+    sql = text("""
+        INSERT INTO conciliacoes (empresa_id, periodo, total_pares, pares_ok, pares_com_erro, status)
+        VALUES (:empresa_id, :periodo, :total_pares, :pares_ok, :pares_com_erro, 'concluido')
+        RETURNING id
+    """)
+    try:
+        with engine.begin() as conn:
+            new_id = conn.execute(sql, {
+                "empresa_id": empresa_id, "periodo": periodo,
+                "total_pares": total_pares, "pares_ok": pares_ok,
+                "pares_com_erro": pares_com_erro,
+            }).scalar_one()
+        logger.info("Conciliacao salva (id=%d) para empresa %d / %s.", new_id, empresa_id, periodo)
+        return new_id
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao salvar conciliacao: %s", exc)
+        raise exc
+
+
+def carregar_conciliacao(empresa_id: int, periodo: str) -> pd.DataFrame:
+    sql = text("""
+        SELECT * FROM conciliacoes
+        WHERE empresa_id = :empresa_id AND periodo = :periodo
+        ORDER BY executado_em DESC
+    """)
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(sql, conn)
-        
-        if not df.empty:
-            df["data"] = pd.to_datetime(df["data"]).dt.date
-            df["valor"] = df["valor"].astype(float).round(2)
-        else:
-            return pd.DataFrame(columns=["id", "data", "categoria", "valor", "origem", "criado_em"])
+            return pd.read_sql_query(sql, conn, params={"empresa_id": empresa_id, "periodo": periodo})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao carregar conciliacao: %s", exc)
+        return pd.DataFrame()
+
+
+# ---------------------------------------------------------------------------
+# Operações — Auditoria
+# ---------------------------------------------------------------------------
+
+def inserir_ocorrencias(ocorrencias: list[dict]) -> int:
+    if not ocorrencias:
+        return 0
+    df = pd.DataFrame(ocorrencias)
+    cols = [c for c in ("empresa_id", "lancamento_id", "tipo_ocorrencia", "descricao", "severidade") if c in df.columns]
+    df = df[cols]
+    try:
+        with engine.begin() as conn:
+            registros = df.to_sql("ocorrencias_auditoria", conn, if_exists="append", index=False, method="multi", chunksize=500)
+        logger.info("%d ocorrencias salvas.", registros or 0)
+        return registros or 0
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao salvar ocorrencias: %s", exc)
+        return 0
+
+
+def carregar_ocorrencias(empresa_id: int, periodo: str) -> pd.DataFrame:
+    sql = text("""
+        SELECT oa.*, l.data, l.conta_contabil, l.valor, l.tipo
+        FROM ocorrencias_auditoria oa
+        LEFT JOIN lancamentos l ON l.id = oa.lancamento_id
+        WHERE oa.empresa_id = :empresa_id
+          AND (l.periodo = :periodo OR l.periodo IS NULL)
+        ORDER BY oa.severidade DESC, oa.criado_em DESC
+    """)
+    try:
+        with engine.connect() as conn:
+            return pd.read_sql_query(sql, conn, params={"empresa_id": empresa_id, "periodo": periodo})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao carregar ocorrencias: %s", exc)
+        return pd.DataFrame()
+
+
+def atualizar_ocorrencia_resolvida(ocorrencia_id: int, resolvida: bool) -> None:
+    sql = text("UPDATE ocorrencias_auditoria SET resolvida = :resolvida WHERE id = :id")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, {"id": ocorrencia_id, "resolvida": resolvida})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao atualizar ocorrencia %d: %s", ocorrencia_id, exc)
+        raise exc
+
+
+# ---------------------------------------------------------------------------
+# Utilitários
+# ---------------------------------------------------------------------------
+
+def listar_empresas() -> pd.DataFrame:
+    try:
+        with engine.connect() as conn:
+            return pd.read_sql_query(text("SELECT id, nome FROM empresas WHERE ativa = TRUE ORDER BY nome"), conn)
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao listar empresas: %s", exc)
+        return pd.DataFrame()
+
+
+def listar_periodos(empresa_id: int = None) -> list[str]:
+    sql = "SELECT DISTINCT periodo FROM lancamentos"
+    params = {}
+    if empresa_id:
+        sql += " WHERE empresa_id = :empresa_id"
+        params["empresa_id"] = empresa_id
+    sql += " ORDER BY periodo DESC"
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(text(sql), conn, params=params)
+        return df["periodo"].dropna().tolist()
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao listar periodos: %s", exc)
+        return []
+
+
+def carregar_lancamentos(empresa_id: int = None, periodo: str = None) -> pd.DataFrame:
+    """Carrega lançamentos com filtros opcionais de empresa e período."""
+    query = "SELECT * FROM lancamentos"
+    params = {}
+    conditions = []
+
+    if empresa_id:
+        conditions.append("empresa_id = :empresa_id")
+        params['empresa_id'] = empresa_id
+    
+    if periodo:
+        conditions.append("periodo = :periodo")
+        params['periodo'] = periodo
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    query += " ORDER BY data, sequencial_lote"
+
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(text(query), conn, params=params)
         return df
     except SQLAlchemyError as exc:
-        logger.error(f"Falha ao carregar dados do PostgreSQL: {exc}")
-        return pd.DataFrame(columns=["id", "data", "categoria", "valor", "origem", "criado_em"])
+        logger.error(f"Falha ao carregar lançamentos: {exc}")
+        return pd.DataFrame()

@@ -18,6 +18,8 @@ env/
 # Environment variables (keep secrets out of git)
 .env
 *.env
+# Garante que o arquivo de modelo (.env.example) SEJA enviado para o GitHub
+!.env.example
 
 # Streamlit
 .streamlit/secrets.toml
@@ -33,3 +35,11 @@ Thumbs.db
 # SQLite local fallback (no longer used)
 *.db
 *.sqlite3
+
+# Dados Temporários e Imagens de Teste (OCR / Uploads)
+*.png
+*.jpg
+*.jpeg
+*.xlsx
+*.csv
+.easyocr/

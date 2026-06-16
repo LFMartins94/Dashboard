@@ -33,7 +33,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 COLUNAS_PADRAO: list[str] = [
-    "data", "categoria", "valor", "tipo", "status", "prioridade", "origem_aba"
+    "data", "conta_contabil", "valor", "tipo", "historico", "filial"
 ]
 SENTINEL: str = "NÃO ENCONTRADO"
 
@@ -43,21 +43,24 @@ _RE_DATA_ISO = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
 # Keywords para detecção de linha de cabeçalho (Estratégia 2)
 _HEADER_KEYWORDS: dict[str, list[str]] = {
-    "data":      ["data", "vencimento", "date", "dt", "competencia", "competência"],
-    "valor":     ["valor", "value", "amount", "total", "r$", "preço", "preco", "custo", "saída", "saida", "entrada"],
-    "categoria": ["categoria", "descrição", "descricao", "description", "nome", "historico", "histórico", "conta"],
+    "data":          ["data", "vencimento", "date", "dt", "competencia", "competência"],
+    "conta_contabil": ["conta contábil", "conta", "categoria", "descrição", "descricao",
+                      "description", "nome", "historico", "histórico"],
+    "valor":         ["valor", "value", "amount", "total", "r$", "preço", "preco",
+                      "custo", "saída", "saida", "entrada"],
 }
 
 # Mapeamento de variações → campo padrão (Estratégia 2)
 _COL_ALIASES: dict[str, list[str]] = {
-    "data":       ["data", "vencimento", "date", "dt", "dia", "competencia", "competência"],
-    "categoria":  ["categoria", "descrição", "descricao", "description", "nome", "historico",
-                   "histórico", "conta contábil", "conta", "hist"],
-    "valor":      ["valor (r$)", "valor", "saída (r$)", "saida (r$)", "entrada (r$)",
-                   "value", "amount", "total (r$)", "total", "vlr"],
-    "tipo":       ["tipo", "type", "classificação", "classificacao", "nat", "natureza"],
-    "status":     ["status", "situação", "situacao"],
-    "prioridade": ["prioridade", "priority"],
+    "data":          ["data", "vencimento", "date", "dt", "dia", "competencia", "competência"],
+    "conta_contabil": ["conta contábil", "conta_contabil", "conta", "categoria",
+                      "descrição", "descricao", "description", "nome", "classificação", "classificacao"],
+    "valor":         ["valor (r$)", "valor", "saída (r$)", "saida (r$)", "entrada (r$)",
+                      "value", "amount", "total (r$)", "total", "vlr", "vl"],
+    "tipo":          ["tipo", "tp", "c/d", "type", "nat", "natureza"],
+    "historico":     ["histórico", "historico", "hist", "descricao", "descrição",
+                      "complemento", "observação", "observacao", "obs"],
+    "filial":        ["filial", "fil", "unidade", "cc", "centro de custo"],
 }
 
 
@@ -159,13 +162,12 @@ def _montar_registro(
         return None
 
     return {
-        "data":       data_str,
-        "categoria":  _get("categoria"),
-        "valor":      valor_flt,
-        "tipo":       _get("tipo"),
-        "status":     _get("status"),
-        "prioridade": _get("prioridade"),
-        "origem_aba": origem_aba,
+        "data":           data_str,
+        "conta_contabil": _get("conta_contabil"),
+        "valor":          valor_flt,
+        "tipo":           _get("tipo"),
+        "historico":      _get("historico"),
+        "filial":         _get("filial"),
     }
 
 
@@ -279,13 +281,13 @@ def _inferir_indices_posicionais(
 def _detectar_indices_posicionais(df_sample: pd.DataFrame) -> dict[str, int | None]:
     """
     Analisa as primeiras linhas do DataFrame para inferir qual coluna
-    contém data, valor e categoria — sem depender de nomes.
+    contem data, valor e conta_contabil — sem depender de nomes.
     """
     idx: dict[str, int | None] = {c: None for c in _COL_ALIASES}
     n_cols = df_sample.shape[1]
 
     col_scores: dict[str, dict[int, float]] = {
-        "data": {}, "valor": {}, "categoria": {}
+        "data": {}, "valor": {}, "conta_contabil": {}
     }
 
     for col_i in range(n_cols):
@@ -314,14 +316,14 @@ def _detectar_indices_posicionais(df_sample: pd.DataFrame) -> dict[str, int | No
                 valor_hits *= 0.2  # penaliza fortemente
         col_scores["valor"][col_i] = valor_hits
 
-        # Score para CATEGORIA: texto longo e variado
+        # Score para CONTA_CONTABIL: texto longo e variado
         media_len_cat = col_vals.str.len().mean()
         n_unicos = col_vals.nunique() / max(len(col_vals), 1)
-        col_scores["categoria"][col_i] = (media_len_cat / 100) * n_unicos
+        col_scores["conta_contabil"][col_i] = (media_len_cat / 100) * n_unicos
 
     # Atribui melhor coluna por campo (sem repetir índice)
     usados: set[int] = set()
-    for campo in ("data", "valor", "categoria"):
+    for campo in ("data", "valor", "conta_contabil"):
         scores = col_scores[campo]
         candidatos = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         for col_i, score in candidatos:
@@ -390,7 +392,152 @@ def _processar_aba(df_raw: pd.DataFrame, nome_aba: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Parser Excel / CSV — entrada principal
+# Normalização de colunas — ContaView
+# ---------------------------------------------------------------------------
+_NORMALIZE_ALIASES: dict[str, list[str]] = {
+    "data":          ["data", "vencimento", "date", "dt", "dia", "competencia"],
+    "conta_contabil": ["conta contábil", "conta_contabil", "conta", "categoria",
+                      "descrição", "descricao", "description", "nome",
+                      "classificacao", "classificação"],
+    "valor":         ["valor", "vlr", "vl", "value", "amount", "total", "r$"],
+    "tipo":          ["tipo", "tp", "c/d", "type", "nat", "natureza"],
+    "historico":     ["histórico", "historico", "hist", "descricao", "descrição",
+                      "complemento", "observação", "observacao", "obs"],
+    "filial":        ["filial", "fil", "unidade", "cc", "centro de custo", "centro de custos"],
+}
+
+
+def normalizar_colunas(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    mapeamento: dict[str, str] = {}
+    for col in df.columns:
+        col_lower = str(col).lower().strip()
+        for padrao, variacoes in _NORMALIZE_ALIASES.items():
+            if col_lower in variacoes:
+                mapeamento[col] = padrao
+                break
+        else:
+            for padrao, variacoes in _NORMALIZE_ALIASES.items():
+                if any(v in col_lower for v in variacoes):
+                    mapeamento[col] = padrao
+                    break
+
+    df = df.rename(columns=mapeamento)
+    df = df[[c for c in COLUNAS_PADRAO if c in df.columns]]
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Limpeza e tipagem — ContaView
+# ---------------------------------------------------------------------------
+def _limpar_valor_contabil(raw) -> float | None:
+    if isinstance(raw, (int, float)):
+        return round(float(raw), 2)
+    try:
+        if pd.isna(raw):
+            return None
+    except (TypeError, ValueError):
+        pass
+    texto = str(raw).strip().replace("R$", "").replace(" ", "")
+    if not texto or texto in ("nan",):
+        return None
+    if "," in texto and "." in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "").replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+    elif "," in texto:
+        texto = texto.replace(",", ".")
+    try:
+        return round(float(texto), 2)
+    except ValueError:
+        return None
+
+
+def limpar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    if "data" in df.columns:
+        df["data"] = pd.to_datetime(df["data"], dayfirst=True, errors="coerce")
+        df = df.dropna(subset=["data"])
+
+    if "valor" in df.columns:
+        df["valor"] = df["valor"].apply(_limpar_valor_contabil)
+        df = df.dropna(subset=["valor"])
+
+    if "tipo" in df.columns:
+        df["tipo"] = df["tipo"].astype(str).str.strip().str.upper()
+        df["tipo"] = df["tipo"].apply(lambda x: x if x in ("C", "D") else None)
+        df = df.dropna(subset=["tipo"])
+
+    if "historico" in df.columns:
+        df["historico"] = df["historico"].fillna("").astype(str)
+        df["historico"] = df["historico"].replace("NÃO ENCONTRADO", "")
+    else:
+        df["historico"] = ""
+
+    if "filial" in df.columns:
+        df["filial"] = df["filial"].fillna("SEM FILIAL").astype(str)
+        df["filial"] = df["filial"].replace("NÃO ENCONTRADO", "SEM FILIAL")
+    else:
+        df["filial"] = "SEM FILIAL"
+
+    if "data" in df.columns:
+        df["periodo"] = df["data"].dt.strftime("%Y-%m")
+
+    df = df.reset_index(drop=True)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Leitura principal — retorna dict com metadados
+# ---------------------------------------------------------------------------
+def ler_arquivo(arquivo: BinaryIO) -> dict:
+    nome: str = getattr(arquivo, "name", "arquivo")
+    ext = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+
+    if ext not in ("xlsx", "xls", "csv"):
+        return {
+            "sucesso": False, "df": None,
+            "linhas_lidas": 0, "linhas_descartadas": 0,
+            "motivo_falha": f"Formato '.{ext}' nao suportado para importacao. Use xlsx ou csv.",
+        }
+
+    try:
+        df_processado = processar_excel_csv(arquivo)
+
+        if df_processado.empty:
+            return {
+                "sucesso": False, "df": None,
+                "linhas_lidas": 0, "linhas_descartadas": 0,
+                "motivo_falha": "Nenhum registro contabil identificado no arquivo.",
+            }
+
+        linhas_lidas = len(df_processado)
+        df_normalizado = normalizar_colunas(df_processado)
+        df_limpo = limpar_dataframe(df_normalizado)
+
+        linhas_descartadas = linhas_lidas - len(df_limpo)
+
+        return {
+            "sucesso": True, "df": df_limpo,
+            "linhas_lidas": linhas_lidas,
+            "linhas_descartadas": linhas_descartadas,
+            "motivo_falha": None,
+        }
+
+    except Exception as exc:
+        logger.error("Falha ao processar '%s': %s", nome, exc)
+        return {
+            "sucesso": False, "df": None,
+            "linhas_lidas": 0, "linhas_descartadas": 0,
+            "motivo_falha": str(exc),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Parser Excel / CSV — entrada principal (mantida para compatibilidade)
 # ---------------------------------------------------------------------------
 def processar_excel_csv(arquivo: BinaryIO) -> pd.DataFrame:
     """
