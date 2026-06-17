@@ -16,6 +16,7 @@ from database import (
     carregar_lancamentos,
     carregar_mensagens,
     carregar_ocorrencias,
+    conversa_existe,
     criar_conversa,
     deletar_conversa,
     inicializar_banco,
@@ -294,7 +295,7 @@ with st.sidebar:
             with c2:
                 if st.button("X", key=f"del_{conv['id']}", use_container_width=True):
                     if st.session_state.get("conversa_ativa") == conv["id"]:
-                        st.session_state.conversa_ativa = None
+                        del st.session_state["conversa_ativa"]
                     deletar_conversa(conv["id"])
                     st.rerun()
 
@@ -744,7 +745,7 @@ elif pagina == "Relatórios":
 
 # ── Assistente ───────────────────────────────────────────────────
 elif pagina == "Assistente":
-    if "conversa_ativa" not in st.session_state:
+    if st.session_state.get("conversa_ativa") is None:
         conv_id = criar_conversa()
         st.session_state.conversa_ativa = conv_id
         st.rerun()
@@ -759,6 +760,12 @@ elif pagina == "Assistente":
 
     pergunta = st.chat_input("Digite sua mensagem...")
     if pergunta:
+        if not conversa_existe(conversa_id):
+            novo_id = criar_conversa()
+            st.session_state.conversa_ativa = novo_id
+            st.warning("A conversa anterior não foi encontrada nesta aba. Uma nova conversa foi iniciada.")
+            st.rerun()
+
         salvar_mensagem(conversa_id, "user", pergunta)
 
         primeira_mensagem = len(mensagens) == 0

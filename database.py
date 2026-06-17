@@ -429,6 +429,16 @@ def salvar_mensagem(conversa_id: int, role: str, conteudo: str) -> None:
         raise exc
 
 
+def conversa_existe(conversa_id: int) -> bool:
+    sql = text("SELECT EXISTS (SELECT 1 FROM conversas WHERE id = :id)")
+    try:
+        with engine.connect() as conn:
+            return bool(conn.execute(sql, {"id": conversa_id}).scalar())
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao verificar se conversa %d existe: %s", conversa_id, exc)
+        return False
+
+
 def carregar_mensagens(conversa_id: int) -> list[dict]:
     sql = text(
         "SELECT role, conteudo FROM mensagens WHERE conversa_id = :conversa_id ORDER BY criado_em ASC"
