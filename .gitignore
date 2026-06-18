@@ -1,3 +1,6 @@
+.states
+assets/external/
+.web
 # Python
 __pycache__/
 *.py[cod]
@@ -21,8 +24,8 @@ env/
 # Garante que o arquivo de modelo (.env.example) SEJA enviado para o GitHub
 !.env.example
 
-# Streamlit
-.streamlit/secrets.toml
+# Streamlit (legado, removido no ContaView)
+.streamlit/
 
 # OS
 .DS_Store
