@@ -3,9 +3,12 @@ database.py (Versão PostgreSQL Otimizada para Supabase Pooler)
 ============================================================
 Módulo de persistência em nuvem utilizando SQLAlchemy e PostgreSQL.
 Focado em alta performance (Bulk Insert) e segurança para dados contábeis.
+Faz fallback automatico entre pooler (6543) e conexão direta (5432)
+para compatibilidade com Supavisor.
 """
 
 import os
+import re
 import logging
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -26,6 +29,26 @@ logger = logging.getLogger(__name__)
 _engine = None
 
 
+def _tentar_criar_engine(url: str):
+    """Tenta criar engine com uma URL. Retorna engine ou None."""
+    try:
+        eng = create_engine(
+            url,
+            pool_size=5,
+            max_overflow=10,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+        )
+        # Testa conexao
+        with eng.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Engine do banco criada com sucesso.")
+        return eng
+    except Exception as exc:
+        logger.warning("Falha ao conectar com URL: %s ... erro=%s", url[:50], exc)
+        return None
+
+
 def _get_engine():
     global _engine
     if _engine is not None:
@@ -36,28 +59,29 @@ def _get_engine():
         logger.warning("Variável DATABASE_URL não encontrada. Verifique o .env ou secrets.")
         raise RuntimeError("DATABASE_URL não configurada")
 
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
+    url = url.replace("postgres://", "postgresql://", 1)
 
-    try:
-        _engine = create_engine(
-            url,
-            pool_size=5,
-            max_overflow=10,
-            pool_recycle=1800,
-            pool_pre_ping=True,
-        )
-        logger.info("Engine do banco criada com sucesso.")
-    except Exception as exc:
-        logger.critical(
-            "Falha ao criar engine do banco. DATABASE_URL=%s, erro=%s",
-            url[:30] + "..." if url else "VAZIA",
-            exc,
-            exc_info=True,
-        )
-        raise exc
+    _engine = _tentar_criar_engine(url)
+    if _engine is not None:
+        return _engine
 
-    return _engine
+    # Fallback: se URL usa pooler (porta 6543), tenta conexão direta na 5432
+    logger.info("Tentando fallback para conexao direta (porta 5432)...")
+    url_fb = url.replace(":6543/", ":5432/")
+    # Extrai project ref do host db.xxxx.supabase.co
+    m = re.search(r"db\.([a-z0-9]+)\.supabase\.co", url_fb)
+    if m:
+        url_fb = re.sub(
+            r"pooler\.supabase\.co",
+            f"db.{m.group(1)}.supabase.co",
+            url_fb,
+        )
+    _engine = _tentar_criar_engine(url_fb)
+    if _engine is not None:
+        return _engine
+
+    logger.critical("Todas as tentativas de conexao falharam.")
+    raise RuntimeError("Não foi possível conectar ao banco de dados.")
 
 
 # Schema completo do banco de dados ContaView

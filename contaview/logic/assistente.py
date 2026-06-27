@@ -10,7 +10,17 @@ logger = logging.getLogger(__name__)
 def _get_client() -> OpenAI | None:
     chave = os.getenv("OPENAI_API_KEY")
     if not chave:
-        logger.error("OPENAI_API_KEY não configurada.")
+        logger.warning("OPENAI_API_KEY não encontrada em os.getenv")
+        try:
+            import reflex as rx
+            chave = rx.config.get("openai_api_key", "")
+        except Exception:
+            pass
+    if not chave:
+        logger.error(
+            "OPENAI_API_KEY não configurada em nenhuma fonte. "
+            "Verifique as secrets no painel da Reflex Cloud."
+        )
         return None
     return OpenAI(api_key=chave)
 
