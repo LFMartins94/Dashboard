@@ -67,15 +67,26 @@ def _get_engine():
 
     # Fallback: se URL usa pooler (porta 6543), tenta conexão direta na 5432
     logger.info("Tentando fallback para conexao direta (porta 5432)...")
-    url_fb = url.replace(":6543/", ":5432/")
-    # Extrai project ref do host db.xxxx.supabase.co
-    m = re.search(r"db\.([a-z0-9]+)\.supabase\.co", url_fb)
-    if m:
-        url_fb = re.sub(
-            r"pooler\.supabase\.co",
-            f"db.{m.group(1)}.supabase.co",
-            url_fb,
+    # Extrai project ref do username no formato postgres.<project_ref>
+    m_ref = re.search(r"postgres\.([a-z0-9]{20})", url)
+    if m_ref:
+        project_ref = m_ref.group(1)
+        # Extrai a senha: tudo entre o último ':' e '@' antes do host
+        auth_part = url.split("@")[0]                     # postgresql://user:pass
+        password = auth_part.rsplit(":", 1)[-1]           # pass
+        # Reconstrói a URL para conexão direta:
+        #   pooler:  postgres.<ref>:<pass>@<region>.pooler.supabase.com:6543/postgres
+        #   direct:  postgres:<pass>@db.<ref>.supabase.co:5432/postgres
+        url_fb = (
+            f"postgresql://postgres:{password}"
+            f"@db.{project_ref}.supabase.co:5432/postgres"
         )
+        if "sslmode=" not in url_fb:
+            url_fb += "?sslmode=require"
+        logger.info("Fallback URL: postgresql://postgres:***@db.%s.supabase.co:5432/postgres", project_ref)
+    else:
+        # Fallback simples: só troca a porta
+        url_fb = url.replace(":6543/", ":5432/")
     _engine = _tentar_criar_engine(url_fb)
     if _engine is not None:
         return _engine

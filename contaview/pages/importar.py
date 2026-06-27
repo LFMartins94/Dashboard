@@ -68,6 +68,53 @@ def _feedback_importacao() -> rx.Component:
     )
 
 
+def _dialog_periodo_manual() -> rx.Component:
+    return rx.alert_dialog.root(
+        rx.alert_dialog.content(
+            rx.alert_dialog.title("Periodo nao identificado"),
+            rx.alert_dialog.description(
+                "Nao foi possivel determinar o periodo contabil deste arquivo "
+                "automaticamente. Informe o periodo manualmente no formato MM/AAAA."
+            ),
+            rx.input(
+                placeholder="MM/AAAA (ex: 05/2026)",
+                value=DadosState.periodo_manual_input,
+                on_change=DadosState.set_periodo_manual_input,
+                width="100%",
+                style=_input_style(),
+            ),
+            rx.text(
+                DadosState.import_mensagem,
+                font_size="13px",
+                color=rx.cond(
+                    TemaState.tema_escuro, ECLIPSE.get("text_secondary"),
+                    MINERAL.get("text_secondary"),
+                ),
+                margin_top="8px",
+            ),
+            rx.flex(
+                rx.alert_dialog.cancel(
+                    rx.button(
+                        "Cancelar",
+                        variant="soft",
+                        on_click=DadosState.set_dialog_periodo_aberto,
+                    ),
+                ),
+                rx.alert_dialog.action(
+                    rx.button(
+                        "Confirmar periodo",
+                        on_click=DadosState.definir_periodo_manual,
+                    ),
+                ),
+                spacing="3",
+                justify="end",
+                margin_top="16px",
+            ),
+        ),
+        open=DadosState.dialog_periodo_aberto,
+    )
+
+
 def _dialog_substituicao() -> rx.Component:
     return rx.alert_dialog.root(
         rx.alert_dialog.content(
@@ -202,6 +249,7 @@ def importar() -> rx.Component:
                     ),
                     _feedback_importacao(),
                     _dialog_substituicao(),
+                    _dialog_periodo_manual(),
                     spacing="4",
                     width="100%",
                     max_width="500px",

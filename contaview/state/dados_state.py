@@ -39,6 +39,12 @@ class DadosState(rx.State):
     confirmacao_pendente_nome: str = ""
     alert_dialog_open: bool = False
 
+    # Dialogo de periodo manual (arquivo 100% ambiguo)
+    dialog_periodo_aberto: bool = False
+    periodo_manual_input: str = ""
+    periodo_manual_df_json: str = ""
+    periodo_manual_nome_arquivo: str = ""
+
     # Conciliacao
     conciliacao_pares: list[dict] = []
     conciliacao_sem_par: list[dict] = []
@@ -230,6 +236,19 @@ class DadosState(rx.State):
                 self.importar_cnpj.strip() or None,
             )
 
+            if resultado.get("periodo_necessario"):
+                df = resultado["df"]
+                self.periodo_manual_df_json = df.to_json(orient="split")
+                self.periodo_manual_nome_arquivo = nome_arquivo
+                self.dialog_periodo_aberto = True
+                self.import_status = "periodo_necessario"
+                self.import_avisos = resultado.get("avisos", [])
+                self.import_mensagem = (
+                    "Nao foi possivel determinar o periodo contabil do arquivo. "
+                    "Informe o periodo manualmente."
+                )
+                return
+
             if resultado.get("requer_confirmacao"):
                 df = resultado["df"]
                 self.confirmacao_pendente_empresa_id = resultado["empresa_id"]
@@ -292,6 +311,55 @@ class DadosState(rx.State):
             self.import_erros = [str(exc)]
         finally:
             self.carregando_importacao = False
+
+    def set_periodo_manual_input(self, valor: str):
+        self.periodo_manual_input = valor
+
+    def definir_periodo_manual(self):
+        import re
+        import pandas as pd
+        import json
+        from contaview.logic import importacao as logic_importacao
+
+        periodo = self.periodo_manual_input.strip()
+
+        if not re.match(r"^\d{2}/\d{4}$", periodo):
+            self.import_mensagem = "Formato invalido. Use MM/AAAA (ex: 05/2026)."
+            return
+
+        try:
+            df = pd.read_json(self.periodo_manual_df_json, orient="split")
+            nome_arquivo = self.periodo_manual_nome_arquivo
+            empresa_nome = self.importar_empresa.strip()
+            empresa_cnpj = self.importar_cnpj.strip() or None
+
+            periodo_iso = periodo.replace("/", "-")
+
+            # Injeta o periodo informado na coluna data
+            from datetime import datetime
+            mes, ano = int(periodo[:2]), int(periodo[3:])
+            df["data"] = pd.to_datetime(
+                df["data"].apply(
+                    lambda d: f"{ano}-{mes:02d}-01" if pd.notna(d) else None
+                ),
+                errors="coerce",
+            )
+
+            buf = io.BytesIO()
+            buf.name = nome_arquivo
+            df.to_parquet(buf)
+
+            self.dialog_periodo_aberto = False
+            self.carregando_importacao = True
+            yield
+
+            self.import_status = ""
+            self.import_mensagem = "Periodo definido. Processando importacao..."
+            yield
+
+        except Exception as exc:
+            logger.error("Erro ao definir periodo manual: %s", exc)
+            self.import_mensagem = f"Erro ao processar periodo: {exc}"
 
     def confirmar_substituicao(self):
         import pandas as pd

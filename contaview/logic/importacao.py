@@ -45,6 +45,17 @@ def executar_importacao(
     # a. Ler arquivo
     resultado_leitura = ler_arquivo(arquivo)
     avisos: list[str] = resultado_leitura.get("avisos", [])
+
+    # Se o periodo nao foi determinado (arquivo 100% ambíguo),
+    # retorna flag para que a interface solicite o periodo manualmente
+    if resultado_leitura.get("periodo_necessario"):
+        return {
+            "sucesso": False,
+            "periodo_necessario": True,
+            "df": resultado_leitura.get("df"),
+            "avisos": avisos,
+        }
+
     if not resultado_leitura["sucesso"]:
         return {
             "sucesso": False,

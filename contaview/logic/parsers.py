@@ -44,6 +44,27 @@ _RE_VALOR = re.compile(r"R?\$?\s*([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)")
 _RE_DATA  = re.compile(r"\b(\d{2}[/\-]\d{2}[/\-]\d{2,4})\b")
 _RE_DATA_ISO = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
+# Mapeamento de meses em português para números (resolução de datas ambíguas)
+MESES_PT: dict[str, int] = {
+    'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4,
+    'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8,
+    'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12,
+    'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4,
+    'mai': 5, 'jun': 6, 'jul': 7, 'ago': 8,
+    'set': 9, 'out': 10, 'nov': 11, 'dez': 12,
+}
+
+# Regex para extrair período do nome do arquivo
+_RE_PERIODO_NOME_MM_AAAA = re.compile(r'(\d{2})[-_.](\d{4})')
+_RE_PERIODO_NOME_AAAA_MM = re.compile(r'(\d{4})[-_.](\d{2})')
+_RE_PERIODO_NOME_MES_ANO = re.compile(
+    r'(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|'
+    r'setembro|outubro|novembro|dezembro|'
+    r'jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)'
+    r'[-_.\s]*?(\d{4})',
+    re.IGNORECASE,
+)
+
 # Keywords para detecção de linha de cabeçalho (Estratégia 2)
 _HEADER_KEYWORDS: dict[str, list[str]] = {
     "data":          ["data", "vencimento", "date", "dt", "competencia", "competência"],
@@ -145,8 +166,20 @@ def _montar_registro(
     row_vals: list,
     idx: dict[str, int | None],
     origem_aba: str,
+    normalizar_data: bool = True,
 ) -> dict | None:
-    """Monta um dicionário de registro a partir de índices resolvidos."""
+    """
+    Monta um dicionario de registro a partir de indices resolvidos.
+
+    Args:
+        row_vals: Valores da linha.
+        idx: Indices das colunas.
+        origem_aba: Nome da aba de origem.
+        normalizar_data: Se True (padrao), converte a data para string ISO
+                         via _normalizar_data. Se False, mantem o valor bruto
+                         da celula (usado por estrategias 1-3 para posterior
+                         processamento em lote por resolver_datas_ambiguas).
+    """
     def _get(campo: str) -> str:
         i = idx.get(campo)
         if i is None or i >= len(row_vals):
@@ -157,9 +190,10 @@ def _montar_registro(
         except (TypeError, ValueError):
             return str(v).strip()
 
-    data_str  = _normalizar_data(_get("data"))
-    valor_str = _get("valor")
-    valor_flt = _normalizar_valor(valor_str)
+    data_raw   = _get("data")
+    data_str   = _normalizar_data(data_raw) if normalizar_data else data_raw
+    valor_str  = _get("valor")
+    valor_flt  = _normalizar_valor(valor_str)
 
     if data_str == SENTINEL and valor_flt == 0.0:
         return None
@@ -218,7 +252,7 @@ def _estrategia_semicolon(df_raw: pd.DataFrame, nome_aba: str) -> pd.DataFrame |
             # Detecta posições por conteúdo
             idx = _inferir_indices_posicionais(partes, headers)
 
-        reg = _montar_registro(partes, idx, nome_aba)
+        reg = _montar_registro(partes, idx, nome_aba, normalizar_data=False)
         if reg:
             registros.append(reg)
 
@@ -254,7 +288,9 @@ def _estrategia_named_header(df_raw: pd.DataFrame, nome_aba: str) -> pd.DataFram
         registros: list[dict] = []
         for _, row in dados.iterrows():
             try:
-                reg = _montar_registro(list(row.values), idx, nome_aba)
+                reg = _montar_registro(
+                    list(row.values), idx, nome_aba, normalizar_data=False,
+                )
                 if reg:
                     registros.append(reg)
             except Exception as exc:
@@ -355,7 +391,9 @@ def _estrategia_posicional(df_raw: pd.DataFrame, nome_aba: str) -> pd.DataFrame 
     registros: list[dict] = []
     for _, row in df_raw.iterrows():
         try:
-            reg = _montar_registro(list(row.values), idx, nome_aba)
+            reg = _montar_registro(
+                list(row.values), idx, nome_aba, normalizar_data=False,
+            )
             if reg:
                 registros.append(reg)
         except Exception as exc:
@@ -582,7 +620,11 @@ def limpar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     if "data" in df.columns:
-        df["data"] = pd.to_datetime(df["data"], dayfirst=True, errors="coerce")
+        # Se a coluna ainda contem objetos date (de resolver_datas_ambiguas),
+        # converte para datetime64 sem dayfirst (que causa bug com pandas 3.x).
+        # Se já é datetime64 (vindo de outro caminho), apenas valida.
+        if not pd.api.types.is_datetime64_any_dtype(df["data"]):
+            df["data"] = pd.to_datetime(df["data"], errors="coerce")
 
     if "valor" in df.columns:
         df["valor"] = df["valor"].apply(_limpar_valor_contabil)
@@ -639,6 +681,221 @@ def extrair_periodo_do_texto(conteudo: bytes) -> tuple[date, date] | None:
             except ValueError:
                 continue
     return None
+
+
+def extrair_periodo_do_nome_arquivo(nome: str) -> tuple[int, int] | None:
+    """
+    Extrai (mes, ano) do nome do arquivo.
+
+    Reconhece padroes:
+      - Nome do mes por extenso/abreviado + ano: Maio_2026, mai2026, JUNHO_2025
+      - MM/AAAA, MM-AAAA, MM_AAAA: 05_2026, 05-2026
+      - AAAA/MM, AAAA-MM: 2026-05
+
+    Retorna (mes, ano) ou None se nao reconhecer nenhum padrao.
+    Usada como fallback por resolver_datas_ambiguas() quando o arquivo
+    nao contem datas inequivocas.
+    """
+    # Remove extensao do arquivo para analise
+    nome_base = nome.rsplit(".", 1)[0] if "." in nome else nome
+
+    # 1. Nome do mes por extenso/abreviado (ex: Maio_2026, mai2026)
+    m = _RE_PERIODO_NOME_MES_ANO.search(nome_base)
+    if m:
+        nome_mes = m.group(1).lower()
+        ano = int(m.group(2))
+        mes = MESES_PT.get(nome_mes)
+        if mes and 2000 <= ano <= 2100:
+            return (mes, ano)
+
+    # 2. MM/AAAA ou MM-AAAA ou MM_AAAA (ex: 05_2026)
+    m = _RE_PERIODO_NOME_MM_AAAA.search(nome_base)
+    if m:
+        mes, ano = int(m.group(1)), int(m.group(2))
+        if 1 <= mes <= 12 and 2000 <= ano <= 2100:
+            return (mes, ano)
+
+    # 3. AAAA-MM ou AAAA_MM (ex: 2026-05)
+    m = _RE_PERIODO_NOME_AAAA_MM.search(nome_base)
+    if m:
+        ano, mes = int(m.group(1)), int(m.group(2))
+        if 1 <= mes <= 12 and 2000 <= ano <= 2100:
+            return (mes, ano)
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Resolução de datas ambíguas — algoritmo de mês dominante
+# ---------------------------------------------------------------------------
+_RE_DATA_RAW = re.compile(r'(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})')
+
+
+def resolver_datas_ambiguas(
+    datas_raw: pd.Series,
+    nome_arquivo: str = "",
+    periodo_extraido: tuple[date, date] | None = None,
+) -> tuple[pd.Series, list[str]]:
+    """
+    Resolve datas ambíguas em uma planilha/aba usando algoritmo de mês dominante.
+
+    Processa TODAS as datas JUNTAS (nao linha a linha) para determinar o formato
+    correto quando dia e mes sao ambos ≤ 12.
+
+    ALGORITMO:
+    1. Primeira passada — identifica linhas inequívocas (token1 > 12, formato DD/MM).
+       Coleta o mês de cada uma dessas linhas.
+    2. Determina o "mês dominante" do arquivo: o mês mais frequente entre as linhas
+       inequívocas. Se nao houver nenhuma, usa fallbacks (periodo do texto do arquivo,
+       nome do arquivo, padrao brasileiro DD/MM).
+    3. Segunda passada — para cada linha ambígua (ambos tokens ≤ 12), escolhe a
+       interpretação cujo mês resultante coincide com o mês dominante.
+    4. Linhas que permanecem ambíguas sao registradas em avisos.
+
+    Esta heurística funciona para qualquer planilha futura com formato de data
+    inconsistente — nao é uma correcao pontual para um arquivo especifico.
+
+    Args:
+        datas_raw: Series de strings de data brutas (ex: "05/01/2026")
+        nome_arquivo: Nome do arquivo (para fallback de periodo)
+        periodo_extraido: Periodo extraido do texto do cabecalho
+
+    Returns:
+        (series_de_datas, avisos) onde series_de_datas contem objetos date
+        e avisos é uma lista de strings de aviso.
+    """
+    from collections import Counter
+
+    avisos: list[str] = []
+
+    if datas_raw.empty:
+        return datas_raw, avisos
+
+    # Preserva indices originais e limpa valores
+    indices_validos = datas_raw.dropna().index
+    valores = datas_raw.dropna().astype(str).str.strip()
+
+    tokens: list[dict | None] = []
+    inequivocos_meses: list[int] = []
+
+    for val in valores:
+        m = _RE_DATA_RAW.match(val)
+        if m:
+            t1, t2, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if ano < 100:
+                ano += 2000
+            tokens.append({"t1": t1, "t2": t2, "ano": ano})
+            # Inequívoco se token1 > 12: formato DD/MM, mes = token2
+            if t1 > 12:
+                inequivocos_meses.append(t2)
+            else:
+                inequivocos_meses.append(None)
+        else:
+            tokens.append(None)
+            inequivocos_meses.append(None)
+
+    # --- Determinar mês dominante ---
+    mes_dominante: int | None = None
+    meses_validos = [m for m in inequivocos_meses if m is not None and 1 <= m <= 12]
+
+    if meses_validos:
+        contagem = Counter(meses_validos)
+        mes_dominante = contagem.most_common(1)[0][0]
+        logger.info(
+            "Datas: %d inequivocas, mes dominante=%02d (freq=%d)",
+            len(meses_validos), mes_dominante, contagem[mes_dominante],
+        )
+    else:
+        # Fallback 1: período extraído do texto do arquivo
+        if periodo_extraido:
+            mes_dominante = periodo_extraido[1].month
+            logger.info(
+                "Datas: nenhuma inequivoca, mes dominante via periodo=%02d",
+                mes_dominante,
+            )
+        else:
+            # Fallback 2: período extraído do nome do arquivo
+            periodo_nome = extrair_periodo_do_nome_arquivo(nome_arquivo)
+            if periodo_nome:
+                mes_dominante = periodo_nome[0]
+                logger.info(
+                    "Datas: nenhuma inequivoca, mes dominante via nome=%02d",
+                    mes_dominante,
+                )
+            else:
+                # Fallback 3: assume formato DD/MM (padrão brasileiro)
+                # Determinar mes dominante das linhas AMBIGUAS como DD/MM
+                datas_ddmm = []
+                for t in tokens:
+                    if t and t["t1"] <= 12 and t["t2"] <= 12:
+                        try:
+                            d = date(t["ano"], t["t2"], t["t1"])
+                            datas_ddmm.append(d.month)
+                        except (ValueError, OverflowError):
+                            continue
+                if datas_ddmm:
+                    contagem_ddmm = Counter(datas_ddmm)
+                    mes_dominante = contagem_ddmm.most_common(1)[0][0]
+                    logger.info(
+                        "Datas: nenhuma inequivoca, mes dominante via DD/MM=%02d",
+                        mes_dominante,
+                    )
+                else:
+                    mes_dominante = None
+                    avisos.append(
+                        "Nao foi possivel determinar o periodo automaticamente. "
+                        "Informe o periodo manualmente na tela de importacao."
+                    )
+
+    # --- Segunda passada: resolver cada data ---
+    resultados: list[date | None] = []
+
+    for t in tokens:
+        if t is None:
+            resultados.append(None)
+            continue
+
+        t1, t2, ano = t["t1"], t["t2"], t["ano"]
+
+        try:
+            if t1 > 12:
+                # Inequívoco DD/MM: dia=t1, mes=t2
+                resultados.append(date(ano, t2, t1))
+            elif t2 > 12:
+                # Inequívoco MM/DD: mes=t1, dia=t2 (caso raro)
+                resultados.append(date(ano, t1, t2))
+            elif mes_dominante is not None:
+                # Ambíguo: usar mês dominante para decidir
+                if t1 == mes_dominante:
+                    # mes=t1 (MM/DD), dia=t2
+                    resultados.append(date(ano, t1, t2))
+                elif t2 == mes_dominante:
+                    # dia=t1, mes=t2 (DD/MM)
+                    resultados.append(date(ano, t2, t1))
+                else:
+                    # Nenhum bate com mês dominante — fallback DD/MM
+                    resultados.append(date(ano, t2, t1))
+                    avisos.append(
+                        f"Data ambigua nao resolvida: {t1:02d}/{t2:02d}/{ano} "
+                        f"(mes dominante={mes_dominante:02d}) — usada como DD/MM."
+                    )
+            else:
+                # Sem mês dominante — fallback DD/MM
+                resultados.append(date(ano, t2, t1))
+        except (ValueError, OverflowError):
+            resultados.append(None)
+
+    # Constroi Series com os mesmos indices da entrada
+    series_resultado = pd.Series(
+        resultados,
+        index=indices_validos,
+        dtype="object",
+    )
+
+    # Reindexa para o tamanho original (preenche NaT onde era NaN na entrada)
+    series_resultado = series_resultado.reindex(datas_raw.index)
+
+    return series_resultado, avisos
 
 
 # ---------------------------------------------------------------------------
@@ -700,12 +957,46 @@ def ler_arquivo(arquivo: BinaryIO) -> dict:
                 "avisos": avisos,
             }
 
+        # --- Resolucao de datas ambiguas em lote ---
+        # Aplica o algoritmo de mes dominante para resolver datas onde
+        # dia e mes sao ambos ≤ 12. Processa TODAS as datas JUNTAS.
+        if "data" in df_processado.columns:
+            datas_resolvidas, avisos_data = resolver_datas_ambiguas(
+                df_processado["data"],
+                nome_arquivo=nome,
+                periodo_extraido=periodo_extraido,
+            )
+            df_processado["data"] = datas_resolvidas
+            avisos.extend(avisos_data)
+
+            # Se o periodo nao foi determinado (arquivo 100% ambiguo)
+            # retorna flag para que a interface peça periodo manual
+            qtd_valida = datas_resolvidas.notna().sum()
+            if qtd_valida > 0:
+                periodo_amostra = [
+                    d.strftime("%Y-%m") for d in datas_resolvidas.dropna().iloc[:5]
+                ]
+                if periodo_amostra:
+                    periodo_dominante = periodo_amostra[0]
+                    if all(p == periodo_dominante for p in periodo_amostra):
+                        pass
+            else:
+                # Nenhuma data resolvida — precisa de periodo manual
+                return {
+                    "sucesso": False,
+                    "df": df_processado,
+                    "periodo_necessario": True,
+                    "linhas_lidas": len(df_processado),
+                    "linhas_descartadas": 0,
+                    "avisos": avisos,
+                }
+
         linhas_lidas = len(df_processado)
         df_normalizado = normalizar_colunas(df_processado)
         df_limpo = limpar_dataframe(df_normalizado)
         linhas_descartadas = linhas_lidas - len(df_limpo)
 
-        # --- Fallback de data via periodo extraido ---
+        # --- Fallback de data via periodo extraido (se coluna data nao existe) ---
         if periodo_extraido and (
             "data" not in df_limpo.columns or df_limpo["data"].isna().all()
         ):
