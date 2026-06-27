@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 
@@ -26,17 +27,60 @@ _SISTEMA = (
 
 
 def perguntar_ao_assistente(mensagens: list[dict]) -> str:
-    historio_completo = [{"role": "system", "content": _SISTEMA}] + mensagens
+    from contaview.logic.assistente_ferramentas import TOOL_SCHEMAS, MAP_FERRAMENTAS
+
+    historico = [{"role": "system", "content": _SISTEMA}] + mensagens
+    client = _get_client()
+    if not client:
+        return "Assistente indisponivel. Verifique a chave da API."
+
     try:
-        client = _get_client()
         resposta = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=historio_completo,
+            messages=historico,
+            tools=TOOL_SCHEMAS,
+            tool_choice="auto",
         )
-        return resposta.choices[0].message.content
+        msg = resposta.choices[0].message
+
+        if not msg.tool_calls:
+            return msg.content or ""
+
+        historico.append(msg)
+
+        for tc in msg.tool_calls:
+            nome = tc.function.name
+            try:
+                args = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                args = {}
+
+            funcao = MAP_FERRAMENTAS.get(nome)
+            if funcao:
+                try:
+                    resultado = funcao(**args)
+                except Exception as exc:
+                    resultado = {"erro": str(exc)}
+            else:
+                resultado = {"erro": f"Funcao '{nome}' desconhecida."}
+
+            historico.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": json.dumps(resultado, ensure_ascii=False),
+            })
+
+        resposta_final = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=historico,
+            tools=TOOL_SCHEMAS,
+            tool_choice="none",
+        )
+        return resposta_final.choices[0].message.content or ""
+
     except Exception as exc:
         logger.error("Erro ao chamar OpenAI: %s", exc)
-        return "Não foi possível obter uma resposta. Tente novamente."
+        return "Nao foi possivel obter uma resposta. Tente novamente."
 
 
 def gerar_titulo_conversa(primeira_mensagem: str) -> str:

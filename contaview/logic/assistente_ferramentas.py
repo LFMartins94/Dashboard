@@ -318,3 +318,132 @@ def listar_periodos_empresa(empresa: str) -> Dict[str, Any]:
     except Exception as exc:
         logger.error("Erro em listar_periodos_empresa: %s", exc)
         return {"erro": "Erro ao listar periodos. Tente novamente."}
+
+
+# ---------------------------------------------------------------------------
+# Schemas OpenAI function calling + mapa de ferramentas
+# ---------------------------------------------------------------------------
+def _schema_periodo_opcional(
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    schema: Dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "empresa": {
+                "type": "string",
+                "description": "Nome da empresa para consulta",
+            },
+            "periodo": {
+                "type": "string",
+                "description": (
+                    "Periodo no formato MM/AAAA (ex: 05/2026), "
+                    "ou mes/AAAA (ex: maio/2026, maio de 2026), "
+                    "ou AAAA-MM (ex: 2026-05). "
+                    "Pode ser vazio para consultar todo o historico."
+                ),
+            },
+        },
+        "required": ["empresa"],
+    }
+    if extra:
+        schema["properties"].update(extra)
+    return schema
+
+
+def _schema_periodo_obrigatorio() -> Dict[str, Any]:
+    s = _schema_periodo_opcional()
+    s["required"] = ["empresa", "periodo"]
+    return s
+
+
+TOOL_SCHEMAS: List[Dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_saldo",
+            "description": "Saldo (creditos - debitos) de uma empresa em um periodo",
+            "parameters": _schema_periodo_opcional(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_total_debitos",
+            "description": "Total de debitos de uma empresa em um periodo",
+            "parameters": _schema_periodo_opcional(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_total_creditos",
+            "description": "Total de creditos de uma empresa em um periodo",
+            "parameters": _schema_periodo_opcional(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_lancamentos",
+            "description": "Lista os lancamentos de uma empresa, opcionalmente por periodo",
+            "parameters": _schema_periodo_opcional({
+                "limite": {
+                    "type": "integer",
+                    "description": "Maximo de registros para retornar (padrao 20)",
+                },
+            }),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_conciliacao",
+            "description": "Resultado da conciliacao de uma empresa em um periodo",
+            "parameters": _schema_periodo_obrigatorio(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_auditoria",
+            "description": "Ocorrencias de auditoria de uma empresa em um periodo",
+            "parameters": _schema_periodo_obrigatorio(),
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_empresas_cadastradas",
+            "description": "Lista todas as empresas cadastradas no sistema",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_periodos_empresa",
+            "description": "Lista os periodos disponiveis para uma empresa",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "empresa": {
+                        "type": "string",
+                        "description": "Nome da empresa",
+                    },
+                },
+                "required": ["empresa"],
+            },
+        },
+    },
+]
+
+MAP_FERRAMENTAS: Dict[str, Any] = {
+    "consultar_saldo": consultar_saldo,
+    "consultar_total_debitos": consultar_total_debitos,
+    "consultar_total_creditos": consultar_total_creditos,
+    "consultar_lancamentos": consultar_lancamentos,
+    "consultar_conciliacao": consultar_conciliacao,
+    "consultar_auditoria": consultar_auditoria,
+    "listar_empresas_cadastradas": listar_empresas_cadastradas,
+    "listar_periodos_empresa": listar_periodos_empresa,
+}
