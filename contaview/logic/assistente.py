@@ -1,13 +1,17 @@
 import logging
+import os
 
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 
-def _get_client() -> OpenAI:
-    import streamlit as st
-    return OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+def _get_client() -> OpenAI | None:
+    chave = os.getenv("OPENAI_API_KEY")
+    if not chave:
+        logger.error("OPENAI_API_KEY não configurada.")
+        return None
+    return OpenAI(api_key=chave)
 
 
 _SISTEMA = (

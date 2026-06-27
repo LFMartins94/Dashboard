@@ -3,13 +3,13 @@ from typing import BinaryIO
 
 import pandas as pd
 
-from database import (
+from contaview.logic.database import (
     deletar_lancamentos_do_periodo,
     obter_ou_criar_empresa,
     salvar_lancamentos,
     verificar_periodo_existente,
 )
-from parsers import ler_arquivo
+from contaview.logic.parsers import ler_arquivo
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +44,12 @@ def executar_importacao(
 ) -> dict:
     # a. Ler arquivo
     resultado_leitura = ler_arquivo(arquivo)
+    avisos: list[str] = resultado_leitura.get("avisos", [])
     if not resultado_leitura["sucesso"]:
         return {
             "sucesso": False,
             "erro": resultado_leitura.get("motivo_falha", "Falha desconhecida ao ler arquivo."),
+            "avisos": avisos,
         }
 
     df = resultado_leitura["df"]
@@ -55,7 +57,7 @@ def executar_importacao(
     # b. Validar
     validacao = validar_pre_import(df)
     if not validacao["valido"]:
-        return {"sucesso": False, "erro": "; ".join(validacao["erros"])}
+        return {"sucesso": False, "erro": "; ".join(validacao["erros"]), "avisos": avisos}
 
     # c. Injetar sequencial
     df = injetar_sequencial_lote(df)
@@ -63,7 +65,11 @@ def executar_importacao(
     # d. Determinar periodo
     periodos = sorted(df["periodo"].dropna().unique())
     if not periodos:
-        return {"sucesso": False, "erro": "Nenhum periodo valido encontrado nos dados."}
+        return {
+            "sucesso": False,
+            "erro": "Nenhum periodo valido encontrado nos dados.",
+            "avisos": avisos,
+        }
     periodo = periodos[0]
 
     # e. Obter ou criar empresa
@@ -71,14 +77,22 @@ def executar_importacao(
         empresa_id = obter_ou_criar_empresa(nome_empresa, cnpj_empresa)
     except Exception as exc:
         logger.error("Erro ao obter/criar empresa '%s': %s", nome_empresa, exc)
-        return {"sucesso": False, "erro": f"Erro ao identificar empresa: {exc}"}
+        return {
+            "sucesso": False,
+            "erro": f"Erro ao identificar empresa: {exc}",
+            "avisos": avisos,
+        }
 
     # f. Verificar duplicidade
     try:
         periodo_existente = verificar_periodo_existente(empresa_id, periodo)
     except Exception as exc:
         logger.error("Erro ao verificar periodo: %s", exc)
-        return {"sucesso": False, "erro": f"Erro ao verificar periodo: {exc}"}
+        return {
+            "sucesso": False,
+            "erro": f"Erro ao verificar periodo: {exc}",
+            "avisos": avisos,
+        }
 
     if periodo_existente:
         return {
@@ -86,23 +100,31 @@ def executar_importacao(
             "empresa_id": empresa_id,
             "periodo": periodo,
             "df": df,
+            "avisos": avisos,
         }
 
     # g. Salvar
-    return _salvar_com_origem(df, empresa_id, arquivo)
+    return _salvar_com_origem(df, empresa_id, arquivo, avisos)
 
 
-def confirmar_substituicao(empresa_id: int, periodo: str, df: pd.DataFrame) -> dict:
+def confirmar_substituicao(
+    empresa_id: int, periodo: str, df: pd.DataFrame,
+    avisos: list[str] | None = None,
+) -> dict:
+    if avisos is None:
+        avisos = []
     try:
         deletar_lancamentos_do_periodo(empresa_id, periodo)
     except Exception as exc:
         logger.error("Erro ao deletar periodo %s: %s", periodo, exc)
-        return {"sucesso": False, "erro": f"Erro ao substituir periodo: {exc}"}
+        return {"sucesso": False, "erro": f"Erro ao substituir periodo: {exc}", "avisos": avisos}
 
-    return _salvar(df, empresa_id)
+    return _salvar(df, empresa_id, avisos)
 
 
-def _salvar(df: pd.DataFrame, empresa_id: int) -> dict:
+def _salvar(df: pd.DataFrame, empresa_id: int, avisos: list[str] | None = None) -> dict:
+    if avisos is None:
+        avisos = []
     try:
         registros = salvar_lancamentos(df, empresa_id)
         periodo = df["periodo"].iloc[0] if "periodo" in df.columns and not df["periodo"].empty else None
@@ -112,14 +134,20 @@ def _salvar(df: pd.DataFrame, empresa_id: int) -> dict:
             "empresa_id": empresa_id,
             "periodo": periodo,
             "df": df,
+            "avisos": avisos,
         }
     except Exception as exc:
         logger.error("Erro ao salvar lancamentos: %s", exc)
-        return {"sucesso": False, "erro": f"Erro ao salvar lancamentos: {exc}"}
+        return {"sucesso": False, "erro": f"Erro ao salvar lancamentos: {exc}", "avisos": avisos}
 
 
-def _salvar_com_origem(df: pd.DataFrame, empresa_id: int, arquivo: BinaryIO) -> dict:
+def _salvar_com_origem(
+    df: pd.DataFrame, empresa_id: int, arquivo: BinaryIO,
+    avisos: list[str] | None = None,
+) -> dict:
+    if avisos is None:
+        avisos = []
     nome_arquivo = getattr(arquivo, "name", "arquivo")
     df = df.copy()
     df["arquivo_origem"] = nome_arquivo
-    return _salvar(df, empresa_id)
+    return _salvar(df, empresa_id, avisos)

@@ -2,7 +2,7 @@ import logging
 
 import pandas as pd
 
-from database import inserir_conciliacao
+from contaview.logic.database import inserir_conciliacao
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def gerar_relatorio_conciliacao(resultado: dict) -> pd.DataFrame:
     if not resultado["df_sem_par"].empty:
         for _, row in resultado["df_sem_par"].iterrows():
             linhas.append({
-                "Tipo": f"Sem par ({row['tipo']})",
+                "Tipo": f"Sem par ({row['tipo'] or 'Nao classificado'})",
                 "Seq. C": row["sequencial_lote"] if row["tipo"] == "C" else "",
                 "Seq. D": row["sequencial_lote"] if row["tipo"] == "D" else "",
                 "Data": row["data"],

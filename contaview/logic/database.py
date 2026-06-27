@@ -23,40 +23,41 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Gerenciamento Seguro de Conexão (Hardening via Environment Variables)
 # ---------------------------------------------------------------------------
-def get_database_url() -> str:
-    """Obtém a URL do banco de dados de forma segura."""
-    # 1. Tenta pegar do st.secrets (Streamlit Cloud)
-    try:
-        import streamlit as st
-        if "DATABASE_URL" in st.secrets:
-            return st.secrets["DATABASE_URL"]
-    except Exception:
-        pass
+_engine = None
 
-    # 2. Tenta pegar das variáveis de ambiente local
+
+def _get_engine():
+    global _engine
+    if _engine is not None:
+        return _engine
+
     url = os.getenv("DATABASE_URL")
-    if url:
-        return url
+    if not url:
+        logger.warning("Variável DATABASE_URL não encontrada. Verifique o .env ou secrets.")
+        raise RuntimeError("DATABASE_URL não configurada")
 
-    # 3. Fallback
-    logger.warning("Variável DATABASE_URL não encontrada. Verifique o .env ou secrets.")
-    return "postgresql://user:password@host:port/database"
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
 
-DATABASE_URL = get_database_url()
+    try:
+        _engine = create_engine(
+            url,
+            pool_size=5,
+            max_overflow=10,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+        )
+        logger.info("Engine do banco criada com sucesso.")
+    except Exception as exc:
+        logger.critical(
+            "Falha ao criar engine do banco. DATABASE_URL=%s, erro=%s",
+            url[:30] + "..." if url else "VAZIA",
+            exc,
+            exc_info=True,
+        )
+        raise exc
 
-# Correção automática de dialeto exigida pelo SQLAlchemy moderno
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-# CRIAÇÃO DA ENGINE COM ADAPTAÇÃO PARA O POOLER DO SUPABASE (PORTA 6543 / IPv4)
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=1800,
-    pool_pre_ping=True,
-    connect_args={"sslmode": "require"} if 'supabase' in DATABASE_URL else {}
-)
+    return _engine
 
 
 # Schema completo do banco de dados ContaView
@@ -75,7 +76,7 @@ CREATE TABLE IF NOT EXISTS lancamentos (
    data DATE NOT NULL,
    conta_contabil VARCHAR(50) NOT NULL,
    valor NUMERIC(14, 2) NOT NULL,
-   tipo CHAR(1) NOT NULL CHECK (tipo IN ('C', 'D')),
+   tipo CHAR(1) CHECK (tipo IS NULL OR tipo IN ('C', 'D')),
    historico TEXT,
    filial VARCHAR(20),
    periodo VARCHAR(7),
@@ -147,7 +148,7 @@ TABELAS = [
 def inicializar_banco() -> None:
     """Garante que todas as tabelas, índices e políticas RLS existam no PostgreSQL."""
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             conn.execute(text(DDL))
         logger.info("Banco de dados inicializado com sucesso.")
     except SQLAlchemyError as exc:
@@ -163,7 +164,7 @@ def obter_ou_criar_empresa(nome: str, cnpj: str = None) -> int:
     find_sql = text("SELECT id FROM empresas WHERE nome = :nome")
     insert_sql = text("INSERT INTO empresas (nome, cnpj) VALUES (:nome, :cnpj) RETURNING id")
 
-    with engine.connect() as conn:
+    with _get_engine().connect() as conn:
         trans = conn.begin()
         try:
             result = conn.execute(find_sql, {"nome": nome}).fetchone()
@@ -189,7 +190,7 @@ def verificar_periodo_existente(empresa_id: int, periodo: str) -> bool:
         )
     """)
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             result = conn.execute(sql, {"empresa_id": empresa_id, "periodo": periodo}).scalar()
             return result
     except SQLAlchemyError as exc:
@@ -207,7 +208,7 @@ def deletar_lancamentos_do_periodo(empresa_id: int, periodo: str) -> int:
     delete_lancamentos_sql = text("DELETE FROM lancamentos WHERE empresa_id = :empresa_id AND periodo = :periodo")
     
     deleted_count = 0
-    with engine.begin() as conn:
+    with _get_engine().begin() as conn:
         try:
             conn.execute(delete_ocorrencias_sql, {"empresa_id": empresa_id, "periodo": periodo})
             conn.execute(delete_conciliacoes_sql, {"empresa_id": empresa_id, "periodo": periodo})
@@ -237,7 +238,7 @@ def salvar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str = 'arquivo
     df_insert = df_insert[colunas_tabela]
 
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             registros_salvos = df_insert.to_sql(
                 name="lancamentos",
                 con=conn,
@@ -267,7 +268,7 @@ def inserir_conciliacao(empresa_id: int, periodo: str, total_pares: int, pares_o
         RETURNING id
     """)
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             new_id = conn.execute(sql, {
                 "empresa_id": empresa_id, "periodo": periodo,
                 "total_pares": total_pares, "pares_ok": pares_ok,
@@ -287,7 +288,7 @@ def carregar_conciliacao(empresa_id: int, periodo: str) -> pd.DataFrame:
         ORDER BY executado_em DESC
     """)
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             return pd.read_sql_query(sql, conn, params={"empresa_id": empresa_id, "periodo": periodo})
     except SQLAlchemyError as exc:
         logger.error("Erro ao carregar conciliacao: %s", exc)
@@ -305,7 +306,7 @@ def inserir_ocorrencias(ocorrencias: list[dict]) -> int:
     cols = [c for c in ("empresa_id", "lancamento_id", "tipo_ocorrencia", "descricao", "severidade") if c in df.columns]
     df = df[cols]
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             registros = df.to_sql("ocorrencias_auditoria", conn, if_exists="append", index=False, method="multi", chunksize=500)
         logger.info("%d ocorrencias salvas.", registros or 0)
         return registros or 0
@@ -324,7 +325,7 @@ def carregar_ocorrencias(empresa_id: int, periodo: str) -> pd.DataFrame:
         ORDER BY oa.severidade DESC, oa.criado_em DESC
     """)
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             return pd.read_sql_query(sql, conn, params={"empresa_id": empresa_id, "periodo": periodo})
     except SQLAlchemyError as exc:
         logger.error("Erro ao carregar ocorrencias: %s", exc)
@@ -334,7 +335,7 @@ def carregar_ocorrencias(empresa_id: int, periodo: str) -> pd.DataFrame:
 def atualizar_ocorrencia_resolvida(ocorrencia_id: int, resolvida: bool) -> None:
     sql = text("UPDATE ocorrencias_auditoria SET resolvida = :resolvida WHERE id = :id")
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             conn.execute(sql, {"id": ocorrencia_id, "resolvida": resolvida})
     except SQLAlchemyError as exc:
         logger.error("Erro ao atualizar ocorrencia %d: %s", ocorrencia_id, exc)
@@ -347,8 +348,8 @@ def atualizar_ocorrencia_resolvida(ocorrencia_id: int, resolvida: bool) -> None:
 
 def listar_empresas() -> pd.DataFrame:
     try:
-        with engine.connect() as conn:
-            return pd.read_sql_query(text("SELECT id, nome FROM empresas WHERE ativa = TRUE ORDER BY nome"), conn)
+        with _get_engine().connect() as conn:
+            return pd.read_sql_query(text("SELECT id, nome, cnpj FROM empresas WHERE ativa = TRUE ORDER BY nome"), conn)
     except SQLAlchemyError as exc:
         logger.error("Erro ao listar empresas: %s", exc)
         return pd.DataFrame()
@@ -362,7 +363,7 @@ def listar_periodos(empresa_id: int = None) -> list[str]:
         params["empresa_id"] = empresa_id
     sql += " ORDER BY periodo DESC"
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             df = pd.read_sql_query(text(sql), conn, params=params)
         return df["periodo"].dropna().tolist()
     except SQLAlchemyError as exc:
@@ -390,7 +391,7 @@ def carregar_lancamentos(empresa_id: int = None, periodo: str = None) -> pd.Data
     query += " ORDER BY data, sequencial_lote"
 
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             df = pd.read_sql_query(text(query), conn, params=params)
         return df
     except SQLAlchemyError as exc:
@@ -404,7 +405,7 @@ def carregar_lancamentos(empresa_id: int = None, periodo: str = None) -> pd.Data
 def criar_conversa(titulo: str = "Nova conversa") -> int:
     sql = text("INSERT INTO conversas (titulo) VALUES (:titulo) RETURNING id")
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             new_id = conn.execute(sql, {"titulo": titulo}).scalar_one()
         logger.info("Conversa criada (id=%d).", new_id)
         return new_id
@@ -421,7 +422,7 @@ def salvar_mensagem(conversa_id: int, role: str, conteudo: str) -> None:
         "UPDATE conversas SET atualizado_em = CURRENT_TIMESTAMP WHERE id = :id"
     )
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             conn.execute(insert_sql, {"conversa_id": conversa_id, "role": role, "conteudo": conteudo})
             conn.execute(update_sql, {"id": conversa_id})
     except SQLAlchemyError as exc:
@@ -432,7 +433,7 @@ def salvar_mensagem(conversa_id: int, role: str, conteudo: str) -> None:
 def conversa_existe(conversa_id: int) -> bool:
     sql = text("SELECT EXISTS (SELECT 1 FROM conversas WHERE id = :id)")
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             return bool(conn.execute(sql, {"id": conversa_id}).scalar())
     except SQLAlchemyError as exc:
         logger.error("Erro ao verificar se conversa %d existe: %s", conversa_id, exc)
@@ -444,9 +445,9 @@ def carregar_mensagens(conversa_id: int) -> list[dict]:
         "SELECT role, conteudo FROM mensagens WHERE conversa_id = :conversa_id ORDER BY criado_em ASC"
     )
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             rows = conn.execute(sql, {"conversa_id": conversa_id}).fetchall()
-        return [{"role": row[0], "conteudo": row[1]} for row in rows]
+        return [{"role": row[0], "content": row[1]} for row in rows]
     except SQLAlchemyError as exc:
         logger.error("Erro ao carregar mensagens: %s", exc)
         return []
@@ -457,7 +458,7 @@ def listar_conversas() -> list[dict]:
         "SELECT id, titulo, atualizado_em FROM conversas ORDER BY atualizado_em DESC"
     )
     try:
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             rows = conn.execute(sql).fetchall()
         return [
             {"id": row[0], "titulo": row[1], "atualizado_em": row[2]}
@@ -471,7 +472,7 @@ def listar_conversas() -> list[dict]:
 def renomear_conversa(conversa_id: int, titulo: str) -> None:
     sql = text("UPDATE conversas SET titulo = :titulo WHERE id = :id")
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             conn.execute(sql, {"id": conversa_id, "titulo": titulo})
     except SQLAlchemyError as exc:
         logger.error("Erro ao renomear conversa %d: %s", conversa_id, exc)
@@ -481,7 +482,7 @@ def renomear_conversa(conversa_id: int, titulo: str) -> None:
 def deletar_conversa(conversa_id: int) -> None:
     sql = text("DELETE FROM conversas WHERE id = :id")
     try:
-        with engine.begin() as conn:
+        with _get_engine().begin() as conn:
             conn.execute(sql, {"id": conversa_id})
         logger.info("Conversa %d deletada.", conversa_id)
     except SQLAlchemyError as exc:

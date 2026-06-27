@@ -1,8 +1,12 @@
-import os
-
 import reflex as rx
+from reflex_base.plugins.sitemap import SitemapPlugin
 
 config = rx.Config(
     app_name="contaview",
-    db_url=os.getenv("DATABASE_URL"),
+    plugins=[
+        rx.plugins.RadixThemesPlugin(),
+    ],
+    disable_plugins=[
+        SitemapPlugin,
+    ],
 )

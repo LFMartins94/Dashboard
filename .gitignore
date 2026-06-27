@@ -20,12 +20,21 @@ env/
 
 # Environment variables (keep secrets out of git)
 .env
+.env.prod
 *.env
 # Garante que o arquivo de modelo (.env.example) SEJA enviado para o GitHub
 !.env.example
 
-# Streamlit (legado, removido no ContaView)
-.streamlit/
+# Reflex build artifacts
+.web/
+reflex.lock/
+reflex_dev.log
+
+# Agent skills lock
+skills-lock.json
+
+# Agent skills (ambiente de desenvolvimento do agente)
+.agents/
 
 # OS
 .DS_Store

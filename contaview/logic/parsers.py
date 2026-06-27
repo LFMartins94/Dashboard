@@ -30,6 +30,9 @@ from typing import Any, BinaryIO
 
 import pandas as pd
 
+from contaview.logic.leitor_xml_legado import detectar_xml_legado, ler_xml_legado
+from contaview.logic.mapeamento_colunas import mapear_colunas, derivar_valor_tipo_de_debito_credito
+
 logger = logging.getLogger(__name__)
 
 COLUNAS_PADRAO: list[str] = [
@@ -272,10 +275,10 @@ def _inferir_indices_posicionais(
 ) -> dict[str, int | None]:
     """
     Infere índices de colunas por análise de conteúdo quando não há cabeçalho.
-    Analisa padrões: datas (regex), valores (numérico), texto longo (categoria).
+    Converte a amostra em DataFrame e delega para _detectar_indices_posicionais.
     """
-    idx: dict[str, int | None] = {c: None for c in _COL_ALIASES}
-    return idx  # será resolvido por _detectar_indices_posicionais abaixo
+    df_amostra = pd.DataFrame([amostra_vals], columns=headers)
+    return _detectar_indices_posicionais(df_amostra)
 
 
 def _detectar_indices_posicionais(df_sample: pd.DataFrame) -> dict[str, int | None]:
@@ -392,6 +395,126 @@ def _processar_aba(df_raw: pd.DataFrame, nome_aba: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# ESTRATÉGIA 4 — Fallback via mapeamento fuzzy de colunas
+# ---------------------------------------------------------------------------
+def _processar_aba_mapeada(
+    df_raw: pd.DataFrame, nome_aba: str,
+) -> pd.DataFrame:
+    """Processa uma unica aba usando mapeamento fuzzy de colunas."""
+    if df_raw.empty:
+        return _df_vazio()
+
+    cabecalhos = [str(v).strip() for v in df_raw.iloc[0].values]
+    dados = df_raw.iloc[1:].reset_index(drop=True)
+
+    mapeamento = mapear_colunas(cabecalhos)
+    if not mapeamento:
+        return _df_vazio()
+
+    mapa_idx: dict[int, str] = {}
+    for i, h in enumerate(cabecalhos):
+        if h in mapeamento:
+            mapa_idx[i] = mapeamento[h]
+
+    tem_data = "data" in mapa_idx.values()
+    tem_valor = "valor" in mapa_idx.values()
+    tem_debito = "debito" in mapa_idx.values()
+    tem_credito = "credito" in mapa_idx.values()
+    if not tem_data or not (tem_valor or tem_debito or tem_credito):
+        return _df_vazio()
+
+    registros: list[dict] = []
+    for _, row in dados.iterrows():
+        reg: dict[str, str] = {}
+        for idx, campo in mapa_idx.items():
+            if idx < len(row):
+                val = row[idx]
+                try:
+                    reg[campo] = str(val).strip() if not pd.isna(val) else ""
+                except (TypeError, ValueError):
+                    reg[campo] = str(val).strip()
+        registros.append(reg)
+
+    if not registros:
+        return _df_vazio()
+
+    df = pd.DataFrame(registros)
+
+    if not tem_valor and (tem_debito or tem_credito):
+        col_debito = "debito" if tem_debito else None
+        col_credito = "credito" if tem_credito else None
+        df = derivar_valor_tipo_de_debito_credito(df, col_debito, col_credito)
+
+    colunas_validas = {c: c for c in df.columns if c in COLUNAS_PADRAO}
+    df = df.rename(columns=colunas_validas)
+    df = df[[c for c in COLUNAS_PADRAO if c in df.columns]]
+    df = limpar_dataframe(df)
+
+    if not df.empty:
+        logger.info("'%s': %d registros via fallback.", nome_aba, len(df))
+
+    return df
+
+
+def _tentar_mapeamento_fallback(arquivo: BinaryIO, ext: str, nome: str) -> pd.DataFrame:
+    """
+    Fallback quando as 3 estrategias nao encontram dados.
+
+    Le o arquivo raw (todas as abas se Excel), mapeia colunas por fuzzy
+    match (rapidfuzz) e extrai registros. Se detectar debito/credito,
+    deriva valor+tipo.
+    """
+    try:
+        arquivo.seek(0)
+        todos: list[pd.DataFrame] = []
+
+        if ext == "csv":
+            conteudo = arquivo.read()
+            if isinstance(conteudo, bytes):
+                for encoding in ("utf-8", "latin-1", "cp1252"):
+                    try:
+                        texto = conteudo.decode(encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    texto = conteudo.decode("latin-1", errors="replace")
+            else:
+                texto = str(conteudo)
+
+            primeira = texto.split("\n")[0]
+            sep = ";" if primeira.count(";") > primeira.count(",") else ","
+            df_raw = pd.read_csv(
+                io.StringIO(texto), sep=sep, dtype=str, header=None,
+            )
+            bloco = _processar_aba_mapeada(df_raw, nome)
+            if not bloco.empty:
+                todos.append(bloco)
+
+        else:
+            xl = pd.ExcelFile(arquivo)
+            for sheet in xl.sheet_names:
+                try:
+                    df_raw = xl.parse(sheet, header=None, dtype=str)
+                    bloco = _processar_aba_mapeada(df_raw, sheet)
+                    if not bloco.empty:
+                        todos.append(bloco)
+                except Exception as exc:
+                    logger.warning("Aba '%s' ignorada no fallback: %s", sheet, exc)
+
+        if not todos:
+            return _df_vazio()
+
+        df = pd.concat(todos, ignore_index=True)
+        logger.info("'%s': %d registros via fallback de mapeamento.", nome, len(df))
+        return df
+
+    except Exception as exc:
+        logger.warning("Fallback de mapeamento falhou para '%s': %s", nome, exc)
+        return _df_vazio()
+
+
+# ---------------------------------------------------------------------------
 # Normalização de colunas — ContaView
 # ---------------------------------------------------------------------------
 _NORMALIZE_ALIASES: dict[str, list[str]] = {
@@ -460,7 +583,6 @@ def limpar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     if "data" in df.columns:
         df["data"] = pd.to_datetime(df["data"], dayfirst=True, errors="coerce")
-        df = df.dropna(subset=["data"])
 
     if "valor" in df.columns:
         df["valor"] = df["valor"].apply(_limpar_valor_contabil)
@@ -469,7 +591,6 @@ def limpar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if "tipo" in df.columns:
         df["tipo"] = df["tipo"].astype(str).str.strip().str.upper()
         df["tipo"] = df["tipo"].apply(lambda x: x if x in ("C", "D") else None)
-        df = df.dropna(subset=["tipo"])
 
     if "historico" in df.columns:
         df["historico"] = df["historico"].fillna("").astype(str)
@@ -491,40 +612,126 @@ def limpar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Extração de período a partir do cabeçalho bruto do arquivo
+# ---------------------------------------------------------------------------
+_RE_PERIODO = re.compile(
+    r"Per[ií]odo:\s*de\s+(\d{2}/\d{2}/\d{4})\s*a\s+(\d{2}/\d{2}/\d{4})"
+)
+_RE_PERIODO2 = re.compile(
+    r"Per[ií]odo\s+(\d{2}/\d{2}/\d{4})\s*(?:a|at[eé])\s*(\d{2}/\d{2}/\d{4})"
+)
+
+
+def extrair_periodo_do_texto(conteudo: bytes) -> tuple[date, date] | None:
+    """Procura 'Período: de DD/MM/AAAA a DD/MM/AAAA' nos primeiros bytes."""
+    try:
+        texto = conteudo.decode("latin-1", errors="replace")
+    except Exception:
+        return None
+    for padrao in (_RE_PERIODO, _RE_PERIODO2):
+        m = padrao.search(texto)
+        if m:
+            try:
+                return (
+                    datetime.strptime(m.group(1), "%d/%m/%Y").date(),
+                    datetime.strptime(m.group(2), "%d/%m/%Y").date(),
+                )
+            except ValueError:
+                continue
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Leitura principal — retorna dict com metadados
 # ---------------------------------------------------------------------------
 def ler_arquivo(arquivo: BinaryIO) -> dict:
     nome: str = getattr(arquivo, "name", "arquivo")
     ext = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+    avisos: list[str] = []
 
     if ext not in ("xlsx", "xls", "csv"):
         return {
             "sucesso": False, "df": None,
             "linhas_lidas": 0, "linhas_descartadas": 0,
             "motivo_falha": f"Formato '.{ext}' nao suportado para importacao. Use xlsx ou csv.",
+            "avisos": avisos,
         }
 
+    # --- Leitura do cabecalho bruto para extrair periodo ---
+    periodo_extraido = None
     try:
-        df_processado = processar_excel_csv(arquivo)
+        cabecalho_raw = arquivo.read(4096)
+        arquivo.seek(0)
+        periodo_extraido = extrair_periodo_do_texto(cabecalho_raw)
+    except Exception:
+        arquivo.seek(0)
+
+    try:
+        # --- Deteccao de XML SpreadsheetLegacy para .xls ---
+        if ext == "xls":
+            cabecalho = arquivo.read(200)
+            if detectar_xml_legado(cabecalho):
+                arquivo.seek(0)
+                conteudo = arquivo.read()
+                abas = ler_xml_legado(conteudo)
+                todos: list[pd.DataFrame] = []
+                for nome_aba, df_raw in abas.items():
+                    bloco = _processar_aba(df_raw, nome_aba)
+                    if not bloco.empty:
+                        todos.append(bloco)
+                df_processado = pd.concat(todos, ignore_index=True) if todos else _df_vazio()
+            else:
+                arquivo.seek(0)
+                df_processado = processar_excel_csv(arquivo)
+        else:
+            df_processado = processar_excel_csv(arquivo)
+
+        # --- Fallback via mapeamento fuzzy de colunas ---
+        if df_processado.empty and ext in ("xlsx", "xls", "csv"):
+            df_fallback = _tentar_mapeamento_fallback(arquivo, ext, nome)
+            if df_fallback is not None and not df_fallback.empty:
+                df_processado = df_fallback
 
         if df_processado.empty:
             return {
                 "sucesso": False, "df": None,
                 "linhas_lidas": 0, "linhas_descartadas": 0,
                 "motivo_falha": "Nenhum registro contabil identificado no arquivo.",
+                "avisos": avisos,
             }
 
         linhas_lidas = len(df_processado)
         df_normalizado = normalizar_colunas(df_processado)
         df_limpo = limpar_dataframe(df_normalizado)
-
         linhas_descartadas = linhas_lidas - len(df_limpo)
+
+        # --- Fallback de data via periodo extraido ---
+        if periodo_extraido and (
+            "data" not in df_limpo.columns or df_limpo["data"].isna().all()
+        ):
+            data_fim = pd.Timestamp(periodo_extraido[1])
+            df_limpo["data"] = data_fim
+            df_limpo["periodo"] = data_fim.strftime("%Y-%m")
+            avisos.append(
+                "Data nao encontrada como coluna — usada data do "
+                "periodo extraido do cabecalho do arquivo."
+            )
+
+        # --- Aviso de tipo nao identificado ---
+        if "tipo" in df_limpo.columns:
+            qtd_sem_tipo = int(df_limpo["tipo"].isna().sum())
+            if qtd_sem_tipo > 0:
+                avisos.append(
+                    f"Tipo nao identificado para {qtd_sem_tipo} lancamento(s) — "
+                    "complete manualmente em Lancamentos, se necessario."
+                )
 
         return {
             "sucesso": True, "df": df_limpo,
             "linhas_lidas": linhas_lidas,
             "linhas_descartadas": linhas_descartadas,
             "motivo_falha": None,
+            "avisos": avisos,
         }
 
     except Exception as exc:
@@ -533,6 +740,7 @@ def ler_arquivo(arquivo: BinaryIO) -> dict:
             "sucesso": False, "df": None,
             "linhas_lidas": 0, "linhas_descartadas": 0,
             "motivo_falha": str(exc),
+            "avisos": avisos,
         }
 
 

@@ -1,8 +1,8 @@
-# ContaView — Ferramenta Contábil Inteligente
+# ContaView — Ferramenta Contabil Inteligente
 
-Sistema web para análise, conciliação e auditoria de dados contábeis.
-Construído para uso individual por contadora, com acesso via navegador,
-sem instalação e sem dependência de TI.
+Sistema web full-stack para analise, conciliacao e auditoria de dados
+contabeis. Construido em [Reflex (Python)](https://reflex.dev) com
+banco de dados Supabase (PostgreSQL).
 
 ---
 
@@ -10,36 +10,59 @@ sem instalação e sem dependência de TI.
 
 ```
 contaview/
-├── app.py              # Interface Streamlit — entry point principal
-├── auth.py             # Autenticação e controle de sessão
-├── database.py         # Conexão Supabase/PostgreSQL via SQLAlchemy
-├── parsers.py          # Leitura de arquivos: Excel, CSV, PDF, imagem
-├── importacao.py       # Fluxo completo de importação com validações
-├── conciliacao.py      # Conciliação de partidas dobradas C/D
-├── auditoria.py        # Detecção de anomalias, duplicidades e erros
-├── relatorios.py       # Exportação de relatórios em PDF e Excel
-├── assistente.py       # Chat com IA via OpenAI — histórico persistido
-├── requirements.txt    # Dependências Python
-├── .env.example        # Modelo de variáveis de ambiente
-├── .gitignore          # Protege credenciais e arquivos sensíveis
-├── AGENTS.md           # Instruções para agentes de IA (OpenCode)
-├── docs/
-│   ├── DESIGN_SYSTEM.md   # Tokens de cor, layout e regras visuais
-│   └── PROMPTS_ETAPAS.md  # Guia de construção por etapas
-└── README.md           # Este arquivo
+└── contaview/
+    ├── contaview.py          # Entry point — registra rx.App e as paginas
+    ├── styles.py             # Tokens de cor MINERAL e ECLIPSE
+    ├── state/
+    │   ├── auth_state.py     # Login, logout, sessao
+    │   ├── tema_state.py     # Alternancia dark/light
+    │   ├── dados_state.py    # Filtros de empresa/periodo, cache de lancamentos
+    │   └── chat_state.py     # Conversas, mensagens, conversa ativa
+    ├── components/
+    │   ├── sidebar.py        # Sidebar completa
+    │   ├── nav_item.py       # Item de navegacao reutilizavel
+    │   ├── conversa_item.py  # Item de conversa com hover e exclusao
+    │   ├── kpi_card.py       # Card de metrica
+    │   ├── alerta.py         # Alertas de auditoria por severidade
+    │   └── filtros.py        # Seletores de empresa e periodo
+    ├── pages/
+    │   ├── login.py
+    │   ├── painel.py
+    │   ├── lancamentos.py
+    │   ├── importar.py
+    │   ├── conciliacao.py
+    │   ├── auditoria.py
+    │   ├── relatorios.py
+    │   └── assistente.py
+    └── logic/                # Logica de negocio (Python puro, sem Reflex)
+        ├── database.py       # Conexao Supabase/PostgreSQL via SQLAlchemy
+        ├── parsers.py        # 4 estrategias em cascata para ler planilhas
+        ├── importacao.py     # Fluxo completo de importacao com validacoes
+        ├── conciliacao.py    # Conciliacao de partidas dobradas C/D
+        ├── auditoria.py      # Deteccao de anomalias, duplicidades e erros
+        ├── relatorios.py     # Exportacao de relatorios em PDF e Excel
+        ├── assistente.py     # Chat com IA via OpenAI
+        ├── leitor_xml_legado.py      # Leitor de XML SpreadsheetML (.xls)
+        ├── mapeamento_colunas.py     # Fallback fuzzy via rapidfuzz
+        └── assistente_ferramentas.py # Ferramentas de consulta para o assistente
+├── assets/
+│   └── styles.css            # CSS global para hover e transicoes
+├── rxconfig.py
+├── requirements.txt
+├── .env.example
+├── .gitignore
+├── AGENTS.md
+└── docs/
+    ├── DESIGN_SYSTEM.md
+    └── PROMPTS_ETAPAS.md
 ```
 
-| Módulo | Responsabilidade |
+| Modulo | Responsabilidade |
 |---|---|
-| `app.py` | Interface Streamlit: navegação, layout, autenticação, tema dark/light |
-| `auth.py` | Login por senha via `st.secrets`, controle de sessão |
-| `database.py` | DDL, conexão segura com Supabase, bulk insert otimizado |
-| `parsers.py` | 3 estratégias em cascata para ler planilhas de qualquer formato |
-| `importacao.py` | Orquestra parsers + validações + banco em fluxo seguro |
-| `conciliacao.py` | Verifica se cada C tem seu D correspondente (partidas dobradas) |
-| `auditoria.py` | Duplicidades, anomalias estatísticas, campos inválidos |
-| `relatorios.py` | PDF e Excel exportável com formatação profissional |
-| `assistente.py` | Chat livre com OpenAI — responde qualquer dúvida contábil ou geral |
+| `contaview.py` | Entry point Reflex: registra app e rotas |
+| `pages/` | 8 paginas: login, painel, lancamentos, importar, conciliacao, auditoria, relatorios, assistente |
+| `state/` | 4 classes de estado: AuthState, TemaState, DadosState, ChatState |
+| `logic/` | Logica de negocio reaproveitada (Python puro, sem dependencia Reflex) |
 
 ---
 
@@ -64,7 +87,7 @@ CREATE TABLE lancamentos (
     data            DATE NOT NULL,
     conta_contabil  VARCHAR(50) NOT NULL,
     valor           NUMERIC(14, 2) NOT NULL,
-    tipo            CHAR(1) NOT NULL CHECK (tipo IN ('C', 'D')),
+    tipo            CHAR(1) CHECK (tipo IS NULL OR tipo IN ('C', 'D')),
     historico       TEXT,
     filial          VARCHAR(20),
     periodo         VARCHAR(7),
@@ -126,162 +149,144 @@ CREATE TABLE mensagens (
 
 ---
 
-## Pré-requisitos
+## Pre-requisitos
 
 - Python **3.11+**
 - Conta no [Supabase](https://supabase.com) — plano gratuito suficiente
-- Conta no [Streamlit Community Cloud](https://streamlit.io/cloud)
-- Repositório no [GitHub](https://github.com) (privado recomendado)
+- Conta na [Reflex Cloud](https://reflex.dev) (opcional para producao)
+- Repositorio no [GitHub](https://github.com) (privado recomendado)
 - Chave de API da [OpenAI](https://platform.openai.com)
 
 ---
 
-## Deploy no Streamlit Community Cloud
+## Execucao local
 
-### 1. Subir o código para o GitHub
-
-```bash
-git add .
-git commit -m "deploy inicial"
-git push origin main
-```
-
-### 2. Conectar no Streamlit Cloud
-
-1. Acesse [share.streamlit.io](https://share.streamlit.io)
-2. Clique em **New app**
-3. Conecte o repositório GitHub
-4. Selecione o arquivo principal: `app.py`
-5. Antes de clicar em Deploy, vá em **Advanced settings → Secrets**
-
-### 3. Configurar os Secrets
-
-```toml
-DATABASE_URL  = "postgresql://usuario:senha@host:6543/postgres?sslmode=require"
-APP_USUARIO   = "nome_da_contadora"
-APP_SENHA     = "senha_de_acesso"
-OPENAI_API_KEY = "sk-proj-..."
-```
-
-### 4. Deploy
-
-Clique em **Deploy** — o Streamlit instala o `requirements.txt` automaticamente.
-
----
-
-## Execução local
-
-### 1. Instalar dependências
+### 1. Criar ambiente virtual e instalar dependencias
 
 ```bash
+python -m venv venv
+venv\Scripts\activate   # Windows
+source venv/bin/activate  # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### 2. Configurar variáveis de ambiente
+### 2. Configurar variaveis de ambiente
 
 ```bash
 cp .env.example .env
 # preencher DATABASE_URL, APP_USUARIO, APP_SENHA, OPENAI_API_KEY
 ```
 
-### 3. Rodar
+### 3. Inicializar e rodar
 
 ```bash
-streamlit run app.py
+reflex init
+reflex run
 ```
 
-Acesse em: `http://localhost:8501`
+Acesse em: `http://localhost:3000`
+
+---
+
+## Deploy na Reflex Cloud
+
+```bash
+reflex deploy
+```
+
+Documentacao oficial: [reflex.dev/docs/hosting/deploy-quick-start/](https://reflex.dev/docs/hosting/deploy-quick-start/)
+
+Configurar variaveis de ambiente no painel da Reflex Cloud:
+```
+DATABASE_URL
+APP_USUARIO
+APP_SENHA
+OPENAI_API_KEY
+```
 
 ---
 
 ## Formatos de planilha suportados
 
-| Formato | Estratégia | Colunas detectadas |
+| Formato | Estrategia | Colunas detectadas |
 |---|---|---|
-| `.xlsx` / `.xls` | 3 estratégias em cascata | `data`, `conta_contabil`, `valor`, `tipo`, `historico`, `filial` |
-| `.csv` | Detecção automática de separador | Idem |
-| `.pdf` | Extração de tabelas nativas | Idem |
+| `.xlsx` / `.xls` (binario) | 3 estrategias em cascata | `data`, `conta_contabil`, `valor`, `tipo`, `historico`, `filial` |
+| `.xls` (XML SpreadsheetML) | Deteccao por cabecalho XML | Idem |
+| `.csv` | Deteccao automatica de separador | Idem |
+| `.pdf` | Extracao de tabelas nativas | Idem |
 | `.png` / `.jpg` | OCR via EasyOCR | `valor`, `data` |
 
-O parser usa 3 estratégias em cascata:
-- **Estratégia 1** — Semicolon-delimited: linha única com campos separados por `;`
-- **Estratégia 2** — Named header: varre o arquivo procurando cabeçalho com palavras-chave contábeis
-- **Estratégia 3** — Headerless positional: detecta colunas por padrão de conteúdo (regex)
+O parser usa 4 estrategias em cascata:
+- **Estrategia 1** — Semicolon-delimited: linha unica com campos separados por `;`
+- **Estrategia 2** — Named header: varre o arquivo procurando cabecalho com palavras-chave contabeis
+- **Estrategia 3** — Headerless positional: detecta colunas por padrao de conteudo (regex)
+- **Estrategia 4** — Fallback fuzzy via rapidfuzz: mapeia colunas com `debito`/`credito`
 
 ---
 
-## Módulos funcionais
+## Modulos funcionais
 
-### Importação
-- Upload de `.xlsx`, `.csv`, `.pdf`, imagem
-- Detecção automática do formato da planilha
-- Verificação de empresa antes do insert (cria se não existir)
-- Bloqueio de importação duplicada por período com opção Substituir ou Cancelar
-- Sequencial de lote injetado automaticamente para garantir ordem dos pares C/D
+### Importacao
+- Upload de `.xlsx`, `.csv`, `.pdf`, imagem, `.xls` XML legado
+- Deteccao automatica do formato da planilha (4 estrategias)
+- Fallback fuzzy com mapeamento de colunas debito/credito
+- Verificacao de empresa antes do insert (cria se nao existir)
+- Bloqueio de importacao duplicada por periodo com opcao Substituir ou Cancelar
+- Sequencial de lote injetado automaticamente
 
 ### Dashboard
-- KPIs: total de débitos, créditos e saldo do período
-- Gráfico de evolução mensal de lançamentos
-- Distribuição por conta contábil e por filial
-- Filtros por empresa e período
+- KPIs: total de debitos, creditos e saldo do periodo
+- Grafico de evolucao mensal de lancamentos
+- Distribuicao por conta contabil e por filial
+- Filtros por empresa e periodo
 
-### Conciliação de partidas dobradas
-- Verifica se cada lançamento C tem seu D correspondente
-- Usa `sequencial_lote` para desempatar lançamentos com mesmo valor e data
-- Relatório de pares conciliados e lançamentos sem par
-- Exportação do relatório em Excel e PDF
+### Conciliacao de partidas dobradas
+- Verifica se cada lancamento C tem seu D correspondente
+- Usa `sequencial_lote` para desempatar lancamentos com mesmo valor e data
+- Relatorio de pares conciliados e lancamentos sem par
+- Exportacao do relatorio em Excel e PDF
 
 ### Auditoria inteligente
 - Duplicidades: mesmo conjunto de data + conta + valor + tipo
-- Lançamentos sem par C/D
-- Anomalias de valor: acima de média + 3 desvios padrão
-- Campos obrigatórios em branco
-- Contas com formato inválido
-- Classificação por severidade: alta, média, baixa
-- Marcação de ocorrências como resolvidas
+- Lancamentos sem par C/D
+- Anomalias de valor: acima de media + 3 desvios padrao
+- Campos obrigatorios em branco
+- Contas com formato invalido
+- Classificacao por severidade: alta, media, baixa
+- Marcacao de ocorrencias como resolvidas
 
-### Exportação de relatórios
-- Excel com formatação profissional (datas DD/MM/AAAA, valores R$)
-- PDF com cabeçalho, tabela e rodapé
-- Disponível para: lançamentos, conciliação e auditoria
+### Exportacao de relatorios
+- Excel com formatacao profissional (datas DD/MM/AAAA, valores R$)
+- PDF com cabecalho, tabela e rodape
+- Disponivel para: lancamentos, conciliacao e auditoria
 
 ### Assistente de IA
 - Chat livre integrado — funciona como o ChatGPT
-- Responde qualquer dúvida contábil, fiscal, tributária ou geral
-- Histórico de conversas salvo no banco entre sessões
-- Lista de conversas anteriores na sidebar com opção de retomar ou deletar
-- Título gerado automaticamente pela IA a partir da primeira mensagem
+- Responde qualquer duvida contabil, fiscal, tributaria ou geral
+- Ferramentas de consulta a dados contabeis (saldo, debitos, creditos, conciliacao, auditoria)
+- Historico de conversas salvo no banco entre sessoes
+- Lista de conversas anteriores na sidebar com opcao de retomar ou deletar
+- Titulo gerado automaticamente pela IA a partir da primeira mensagem
 - Powered by OpenAI GPT-4o-mini
 
 ---
 
-## Segurança
+## Seguranca
 
-| Camada | Implementação |
+| Camada | Implementacao |
 |---|---|
-| Credenciais | Nunca no código. Sempre via `st.secrets` (produção) ou `.env` (local) |
-| Autenticação | Login por senha antes de qualquer tela, com bloqueio total sem login |
-| Banco de dados | Conexão SSL obrigatória, chave `service_role` apenas no backend |
-| Git | `.gitignore` protege `.env`, `*.key`, `secrets/`, `__pycache__/` |
-| Backup | Supabase realiza backup automático diário no plano gratuito |
-
-### `.gitignore` mínimo obrigatório
-
-```
-.env
-*.key
-secrets/
-__pycache__/
-*.pyc
-.streamlit/secrets.toml
-```
+| Credenciais | Nunca no codigo. Sempre via `os.getenv()` / variaveis de ambiente |
+| Autenticacao | Login por senha antes de qualquer tela, com bloqueio total sem login |
+| Banco de dados | Conexao SSL obrigatoria, SQLAlchemy com pool |
+| Git | `.gitignore` protege `.env`, `venv/`, `__pycache__/` |
+| Backup | Supabase realiza backup automatico diario no plano gratuito |
 
 ---
 
-## Dependências (`requirements.txt`)
+## Dependencias (`requirements.txt`)
 
 ```
-streamlit
+reflex
 pandas
 plotly
 openpyxl
@@ -289,16 +294,16 @@ python-pptx
 pdfplumber
 psycopg2-binary
 SQLAlchemy
-easyocr
 Pillow
 xlsxwriter
 reportlab
 python-dotenv
 openai
+rapidfuzz
 ```
 
 ---
 
-## Licença
+## Licenca
 
 MIT — uso livre para fins pessoais e profissionais.

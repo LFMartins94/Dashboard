@@ -2,8 +2,8 @@ import logging
 
 import pandas as pd
 
-from conciliacao import conciliar_partidas
-from database import inserir_ocorrencias
+from contaview.logic.conciliacao import conciliar_partidas
+from contaview.logic.database import inserir_ocorrencias
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
             "lancamento_id": None,
             "tipo_ocorrencia": "SEM_PAR",
             "descricao": (
-                f"Lancamento sem par: {row['tipo']} "
+                f"Lancamento sem par: {row['tipo'] or 'Nao classificado'} "
                 f"R$ {row['valor']:.2f} em {row['data']}"
             ),
             "severidade": "alta",
