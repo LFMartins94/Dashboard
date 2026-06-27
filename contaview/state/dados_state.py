@@ -361,6 +361,12 @@ class DadosState(rx.State):
             logger.error("Erro ao definir periodo manual: %s", exc)
             self.import_mensagem = f"Erro ao processar periodo: {exc}"
 
+    def cancelar_periodo_manual(self):
+        self.dialog_periodo_aberto = False
+        self.periodo_manual_input = ""
+        self.import_status = ""
+        self.import_mensagem = ""
+
     def confirmar_substituicao(self):
         import pandas as pd
         from contaview.logic import importacao as logic_importacao

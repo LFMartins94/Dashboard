@@ -97,7 +97,7 @@ def _dialog_periodo_manual() -> rx.Component:
                     rx.button(
                         "Cancelar",
                         variant="soft",
-                        on_click=DadosState.set_dialog_periodo_aberto,
+                        on_click=DadosState.cancelar_periodo_manual,
                     ),
                 ),
                 rx.alert_dialog.action(
