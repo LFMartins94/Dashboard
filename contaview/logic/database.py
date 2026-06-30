@@ -147,7 +147,8 @@ CREATE TABLE IF NOT EXISTS conversas (
    id SERIAL PRIMARY KEY,
    titulo VARCHAR(200) NOT NULL DEFAULT 'Nova conversa',
    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-   atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+   atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   favorito BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS mensagens (
@@ -180,11 +181,18 @@ TABELAS = [
 ]
 
 
+_MIGRACOES = [
+    "ALTER TABLE conversas ADD COLUMN IF NOT EXISTS favorito BOOLEAN NOT NULL DEFAULT FALSE;",
+]
+
+
 def inicializar_banco() -> None:
     """Garante que todas as tabelas, índices e políticas RLS existam no PostgreSQL."""
     try:
         with _get_engine().begin() as conn:
             conn.execute(text(DDL))
+            for migracao in _MIGRACOES:
+                conn.execute(text(migracao))
         logger.info("Banco de dados inicializado com sucesso.")
     except SQLAlchemyError as exc:
         logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
@@ -390,6 +398,17 @@ def listar_empresas() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def renomear_empresa(empresa_id: int, novo_nome: str) -> None:
+    sql = text("UPDATE empresas SET nome = :nome WHERE id = :id")
+    try:
+        with _get_engine().begin() as conn:
+            conn.execute(sql, {"id": empresa_id, "nome": novo_nome})
+        logger.info("Empresa %d renomeada para '%s'.", empresa_id, novo_nome)
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao renomear empresa %d: %s", empresa_id, exc)
+        raise exc
+
+
 def listar_periodos(empresa_id: int = None) -> list[str]:
     sql = "SELECT DISTINCT periodo FROM lancamentos"
     params = {}
@@ -490,18 +509,29 @@ def carregar_mensagens(conversa_id: int) -> list[dict]:
 
 def listar_conversas() -> list[dict]:
     sql = text(
-        "SELECT id, titulo, atualizado_em FROM conversas ORDER BY atualizado_em DESC"
+        "SELECT id, titulo, atualizado_em, favorito "
+        "FROM conversas ORDER BY favorito DESC, atualizado_em DESC"
     )
     try:
         with _get_engine().connect() as conn:
             rows = conn.execute(sql).fetchall()
         return [
-            {"id": row[0], "titulo": row[1], "atualizado_em": row[2]}
+            {"id": row[0], "titulo": row[1], "atualizado_em": row[2], "favorito": row[3]}
             for row in rows
         ]
     except SQLAlchemyError as exc:
         logger.error("Erro ao listar conversas: %s", exc)
         return []
+
+
+def favoritar_conversa(conversa_id: int, favorito: bool) -> None:
+    sql = text("UPDATE conversas SET favorito = :favorito WHERE id = :id")
+    try:
+        with _get_engine().begin() as conn:
+            conn.execute(sql, {"id": conversa_id, "favorito": favorito})
+    except SQLAlchemyError as exc:
+        logger.error("Erro ao favoritar conversa %d: %s", conversa_id, exc)
+        raise exc
 
 
 def renomear_conversa(conversa_id: int, titulo: str) -> None:

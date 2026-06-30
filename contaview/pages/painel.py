@@ -42,6 +42,50 @@ def painel() -> rx.Component:
                 ),
                 filtros(),
                 rx.cond(
+                    DadosState.empresa_selecionada != "",
+                    rx.hstack(
+                        rx.button(
+                            "Renomear empresa",
+                            variant="ghost",
+                            size="1",
+                            on_click=DadosState.abrir_renomear_empresa,
+                        ),
+                        width="100%",
+                    ),
+                ),
+                rx.alert_dialog.root(
+                    rx.alert_dialog.content(
+                        rx.alert_dialog.title("Renomear empresa"),
+                        rx.alert_dialog.description(
+                            "Altere o nome da empresa selecionada."
+                        ),
+                        rx.input(
+                            value=DadosState.renomear_empresa_nome,
+                            on_change=DadosState.set_renomear_empresa_nome,
+                            width="100%",
+                        ),
+                        rx.flex(
+                            rx.alert_dialog.cancel(
+                                rx.button(
+                                    "Cancelar",
+                                    variant="soft",
+                                    on_click=DadosState.cancelar_renomear_empresa,
+                                ),
+                            ),
+                            rx.alert_dialog.action(
+                                rx.button(
+                                    "Salvar",
+                                    on_click=DadosState.confirmar_renomear_empresa,
+                                ),
+                            ),
+                            spacing="3",
+                            justify="end",
+                            margin_top="16px",
+                        ),
+                    ),
+                    open=DadosState.dialog_renomear_aberto,
+                ),
+                rx.cond(
                     DadosState.carregando,
                     rx.spinner(),
                     rx.vstack(

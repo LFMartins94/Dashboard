@@ -176,7 +176,7 @@ def importar() -> rx.Component:
                         DadosState.empresas_disponiveis,
                         rx.select(
                             DadosState.empresas_disponiveis,
-                            placeholder="Selecione uma empresa",
+                            placeholder="Empresa (opcional)",
                             value=DadosState.importar_empresa,
                             on_change=DadosState.set_importar_empresa,
                             width="100%",

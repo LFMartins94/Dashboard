@@ -9,7 +9,7 @@ from contaview.logic.database import (
     salvar_lancamentos,
     verificar_periodo_existente,
 )
-from contaview.logic.parsers import ler_arquivo
+from contaview.logic.parsers import ler_arquivo, limpar_dataframe, normalizar_colunas
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,31 @@ def executar_importacao(
 
     df = resultado_leitura["df"]
 
+    return _executar_dataframe(df, nome_empresa, cnpj_empresa, arquivo, avisos)
+
+
+def executar_importacao_dataframe(
+    df: pd.DataFrame,
+    nome_empresa: str,
+    cnpj_empresa: str = None,
+    nome_arquivo: str = "arquivo",
+    avisos: list[str] | None = None,
+) -> dict:
+    if avisos is None:
+        avisos = []
+
+    return _executar_dataframe(df, nome_empresa, cnpj_empresa, nome_arquivo, avisos)
+
+
+def _executar_dataframe(
+    df: pd.DataFrame,
+    nome_empresa: str,
+    cnpj_empresa: str | None,
+    arquivo_origem,
+    avisos: list[str],
+) -> dict:
+    df = limpar_dataframe(normalizar_colunas(df))
+
     # b. Validar
     validacao = validar_pre_import(df)
     if not validacao["valido"]:
@@ -115,7 +140,7 @@ def executar_importacao(
         }
 
     # g. Salvar
-    return _salvar_com_origem(df, empresa_id, arquivo, avisos)
+    return _salvar_com_origem(df, empresa_id, arquivo_origem, avisos)
 
 
 def confirmar_substituicao(
@@ -153,12 +178,14 @@ def _salvar(df: pd.DataFrame, empresa_id: int, avisos: list[str] | None = None) 
 
 
 def _salvar_com_origem(
-    df: pd.DataFrame, empresa_id: int, arquivo: BinaryIO,
+    df: pd.DataFrame, empresa_id: int, arquivo: BinaryIO | str,
     avisos: list[str] | None = None,
 ) -> dict:
     if avisos is None:
         avisos = []
-    nome_arquivo = getattr(arquivo, "name", "arquivo")
+    nome_arquivo = (
+        arquivo if isinstance(arquivo, str) else getattr(arquivo, "name", "arquivo")
+    )
     df = df.copy()
     df["arquivo_origem"] = nome_arquivo
     return _salvar(df, empresa_id, avisos)

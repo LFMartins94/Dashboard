@@ -74,6 +74,17 @@ def sidebar() -> rx.Component:
                 ),
                 rx.scroll_area(
                     rx.vstack(
+                        rx.cond(
+                            ChatState.tem_favoritas,
+                            rx.foreach(
+                                ChatState.conversas_favoritas,
+                                conversa_item,
+                            ),
+                        ),
+                        rx.cond(
+                            ChatState.tem_favoritas,
+                            rx.divider(margin_y="4px"),
+                        ),
                         rx.foreach(ChatState.conversas, conversa_item),
                         spacing="1",
                     ),

@@ -27,57 +27,135 @@ def _input_style() -> dict:
 
 def login() -> rx.Component:
     return rx.center(
-        rx.vstack(
+        rx.cond(
+            rx.State.is_hydrated,
+            rx.form.root(
+                rx.vstack(
+                    rx.vstack(
+                        rx.text(
+                            "Conta",
+                            rx.text.span(
+                                "View",
+                                color=rx.cond(
+                                    TemaState.tema_escuro,
+                                    ECLIPSE["accent"],
+                                    MINERAL["accent"],
+                                ),
+                            ),
+                            size="5",
+                            weight="bold",
+                            color=rx.cond(
+                                TemaState.tema_escuro,
+                                ECLIPSE["text_primary"],
+                                MINERAL["text_primary"],
+                            ),
+                        ),
+                        rx.text(
+                            "Acesso restrito",
+                            size="2",
+                            color=rx.cond(
+                                TemaState.tema_escuro,
+                                ECLIPSE["text_secondary"],
+                                MINERAL["text_secondary"],
+                            ),
+                        ),
+                        spacing="1",
+                        align="center",
+                        width="100%",
+                        margin_bottom="24px",
+                    ),
+                    rx.input(
+                        name="usuario",
+                        placeholder="Usuario",
+                        width="100%",
+                        style=_input_style(),
+                        disabled=AuthState.carregando_login,
+                    ),
+                    rx.input(
+                        name="senha",
+                        placeholder="Senha",
+                        type="password",
+                        width="100%",
+                        style=_input_style(),
+                        disabled=AuthState.carregando_login,
+                    ),
+                    rx.button(
+                        rx.cond(
+                            AuthState.carregando_login,
+                            "Conectando...",
+                            "Entrar",
+                        ),
+                        type="submit",
+                        width="100%",
+                        disabled=AuthState.carregando_login,
+                        background=rx.cond(
+                            TemaState.tema_escuro,
+                            ECLIPSE["accent"],
+                            MINERAL["accent"],
+                        ),
+                        color=rx.cond(
+                            TemaState.tema_escuro,
+                            ECLIPSE["sidebar_bg"],
+                            MINERAL["sidebar_bg"],
+                        ),
+                    ),
+                    spacing="3",
+                    width="320px",
+                    background=rx.cond(
+                        TemaState.tema_escuro,
+                        ECLIPSE["card_bg"],
+                        MINERAL["card_bg"],
+                    ),
+                    border=rx.cond(
+                        TemaState.tema_escuro,
+                        f"1px solid {ECLIPSE['border']}",
+                        f"1px solid {MINERAL['border']}",
+                    ),
+                    border_radius="10px",
+                    padding="32px",
+                    box_shadow="0 4px 12px rgba(0,0,0,0.1)",
+                ),
+                on_submit=AuthState.fazer_login_submit,
+                reset_on_submit=False,
+            ),
             rx.vstack(
                 rx.text(
                     "Conta",
                     rx.text.span(
                         "View",
-                        color=rx.cond(TemaState.tema_escuro, ECLIPSE["accent"], MINERAL["accent"]),
+                        color=rx.cond(
+                            TemaState.tema_escuro,
+                            ECLIPSE["accent"],
+                            MINERAL["accent"],
+                        ),
                     ),
                     size="5",
                     weight="bold",
-                    color=rx.cond(TemaState.tema_escuro, ECLIPSE["text_primary"], MINERAL["text_primary"]),
+                    color=rx.cond(
+                        TemaState.tema_escuro,
+                        ECLIPSE["text_primary"],
+                        MINERAL["text_primary"],
+                    ),
                 ),
                 rx.text(
-                    "Acesso restrito",
+                    "Conectando ao servidor...",
                     size="2",
-                    color=rx.cond(TemaState.tema_escuro, ECLIPSE["text_secondary"], MINERAL["text_secondary"]),
+                    color=rx.cond(
+                        TemaState.tema_escuro,
+                        ECLIPSE["text_secondary"],
+                        MINERAL["text_secondary"],
+                    ),
                 ),
-                spacing="1",
+                spacing="3",
+                padding="32px",
                 align="center",
-                width="100%",
-                margin_bottom="24px",
             ),
-            rx.input(
-                placeholder="Usuário",
-                on_change=AuthState.set_usuario_input,
-                width="100%",
-                style=_input_style(),
-            ),
-            rx.input(
-                placeholder="Senha",
-                type="password",
-                on_change=AuthState.set_senha_input,
-                width="100%",
-                style=_input_style(),
-            ),
-            rx.button(
-                "Entrar",
-                on_click=AuthState.fazer_login(AuthState.usuario_input, AuthState.senha_input),
-                width="100%",
-                background=rx.cond(TemaState.tema_escuro, ECLIPSE["accent"], MINERAL["accent"]),
-                color=rx.cond(TemaState.tema_escuro, ECLIPSE["sidebar_bg"], MINERAL["sidebar_bg"]),
-            ),
-            spacing="3",
-            width="320px",
-            background=rx.cond(TemaState.tema_escuro, ECLIPSE["card_bg"], MINERAL["card_bg"]),
-            border=rx.cond(TemaState.tema_escuro, f"1px solid {ECLIPSE['border']}", f"1px solid {MINERAL['border']}"),
-            border_radius="10px",
-            padding="32px",
-            box_shadow="0 4px 12px rgba(0,0,0,0.1)",
         ),
         height="100vh",
         width="100%",
-        background=rx.cond(TemaState.tema_escuro, ECLIPSE["content_bg"], MINERAL["content_bg"]),
+        background=rx.cond(
+            TemaState.tema_escuro,
+            ECLIPSE["content_bg"],
+            MINERAL["content_bg"],
+        ),
     )

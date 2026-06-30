@@ -57,6 +57,11 @@ class DadosState(rx.State):
     download_data: str = ""
     download_filename: str = ""
 
+    # Renomear empresa
+    renomear_empresa_nome_atual: str = ""
+    renomear_empresa_nome: str = ""
+    dialog_renomear_aberto: bool = False
+
     def set_tema(self, valor: bool):
         self.tema_escuro = valor
 
@@ -80,6 +85,11 @@ class DadosState(rx.State):
 
     def set_importar_cnpj(self, valor: str):
         self.importar_cnpj = valor
+
+    @staticmethod
+    def _derivar_nome_empresa(nome_arquivo: str) -> str:
+        nome_base = nome_arquivo.rsplit(".", 1)[0]
+        return nome_base.replace("_", " ").strip()
 
     def _resolver_empresa_id(self, nome: str) -> int | None:
         from contaview.logic import database
@@ -157,6 +167,44 @@ class DadosState(rx.State):
         self._carregar_conciliacao_dados()
         self._carregar_ocorrencias_dados()
 
+    def _executar_rotinas_pos_importacao(
+        self,
+        df_salvo: pd.DataFrame | None,
+        empresa_id: int,
+        periodo: str,
+    ) -> str:
+        from contaview.logic import auditoria as logic_auditoria
+        from contaview.logic import conciliacao as logic_conciliacao
+
+        if df_salvo is None or df_salvo.empty or not empresa_id or not periodo:
+            return ""
+
+        try:
+            conc_res = logic_conciliacao.conciliar_partidas(df_salvo)
+            logic_conciliacao.salvar_resultado_conciliacao(
+                empresa_id, periodo, conc_res
+            )
+            oc_res = logic_auditoria.auditar_lancamentos(df_salvo)
+            logic_auditoria.salvar_ocorrencias(oc_res, empresa_id)
+            resumo = logic_auditoria.resumo_auditoria(oc_res)
+            return (
+                f" Auditoria: {resumo['alta']} alta(s), "
+                f"{resumo['media']} media(s), "
+                f"{resumo['baixa']} baixa(s)."
+            )
+        except Exception as exc:
+            logger.warning("Auditoria/conciliacao automatica apos import: %s", exc)
+            return ""
+
+    def _preparar_confirmacao_substituicao(self, resultado: dict, nome_arquivo: str):
+        df = resultado["df"]
+        self.confirmacao_pendente_empresa_id = resultado["empresa_id"]
+        self.confirmacao_pendente_periodo = resultado["periodo"]
+        self.confirmacao_pendente_df_json = df.to_json(orient="split")
+        self.confirmacao_pendente_nome = nome_arquivo
+        self.alert_dialog_open = True
+        self.import_status = "confirmacao"
+
     def _carregar_conciliacao_dados(self):
         from contaview.logic.conciliacao import conciliar_partidas
 
@@ -199,10 +247,7 @@ class DadosState(rx.State):
 
     async def handle_upload_import(self, files: list[rx.UploadFile]):
         import io
-        import json
         from contaview.logic import importacao as logic_importacao
-        from contaview.logic import conciliacao as logic_conciliacao
-        from contaview.logic import auditoria as logic_auditoria
 
         self.carregando_importacao = True
         self.import_status = ""
@@ -221,18 +266,14 @@ class DadosState(rx.State):
             file = files[0]
             content = await file.read()
             nome_arquivo = file.filename or "arquivo"
-
-            if not self.importar_empresa.strip():
-                self.import_status = "erro"
-                self.import_mensagem = "Informe o nome da empresa."
-                return
+            empresa_nome = self.importar_empresa.strip() or self._derivar_nome_empresa(nome_arquivo)
 
             buf = io.BytesIO(content)
             buf.name = nome_arquivo
 
             resultado = logic_importacao.executar_importacao(
                 buf,
-                self.importar_empresa.strip(),
+                empresa_nome,
                 self.importar_cnpj.strip() or None,
             )
 
@@ -250,13 +291,7 @@ class DadosState(rx.State):
                 return
 
             if resultado.get("requer_confirmacao"):
-                df = resultado["df"]
-                self.confirmacao_pendente_empresa_id = resultado["empresa_id"]
-                self.confirmacao_pendente_periodo = resultado["periodo"]
-                self.confirmacao_pendente_df_json = df.to_json(orient="split")
-                self.confirmacao_pendente_nome = nome_arquivo
-                self.alert_dialog_open = True
-                self.import_status = "confirmacao"
+                self._preparar_confirmacao_substituicao(resultado, nome_arquivo)
                 return
 
             if resultado.get("sucesso"):
@@ -271,23 +306,9 @@ class DadosState(rx.State):
                 df_salvo = resultado.get("df")
 
                 if df_salvo is not None and not df_salvo.empty and empresa_id and periodo:
-                    try:
-                        conc_res = logic_conciliacao.conciliar_partidas(df_salvo)
-                        logic_conciliacao.salvar_resultado_conciliacao(
-                            empresa_id, periodo, conc_res
-                        )
-                        oc_res = logic_auditoria.auditar_lancamentos(df_salvo)
-                        qtd_oc = logic_auditoria.salvar_ocorrencias(oc_res, empresa_id)
-                        resumo = logic_auditoria.resumo_auditoria(oc_res)
-                        self.import_mensagem += (
-                            f" Auditoria: {resumo['alta']} alta(s), "
-                            f"{resumo['media']} media(s), "
-                            f"{resumo['baixa']} baixa(s)."
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Auditoria/conciliacao automatica apos import: %s", exc
-                        )
+                    self.import_mensagem += self._executar_rotinas_pos_importacao(
+                        df_salvo, empresa_id, periodo
+                    )
 
                 self.importar_empresa = ""
                 self.importar_cnpj = ""
@@ -318,7 +339,6 @@ class DadosState(rx.State):
     def definir_periodo_manual(self):
         import re
         import pandas as pd
-        import json
         from contaview.logic import importacao as logic_importacao
 
         periodo = self.periodo_manual_input.strip()
@@ -327,39 +347,79 @@ class DadosState(rx.State):
             self.import_mensagem = "Formato invalido. Use MM/AAAA (ex: 05/2026)."
             return
 
+        mes, ano = int(periodo[:2]), int(periodo[3:])
+        if not 1 <= mes <= 12:
+            self.import_mensagem = "Mes invalido. Use MM/AAAA (ex: 05/2026)."
+            return
+
         try:
             df = pd.read_json(self.periodo_manual_df_json, orient="split")
             nome_arquivo = self.periodo_manual_nome_arquivo
-            empresa_nome = self.importar_empresa.strip()
+            empresa_nome = self.importar_empresa.strip() or self._derivar_nome_empresa(nome_arquivo)
             empresa_cnpj = self.importar_cnpj.strip() or None
 
-            periodo_iso = periodo.replace("/", "-")
-
-            # Injeta o periodo informado na coluna data
-            from datetime import datetime
-            mes, ano = int(periodo[:2]), int(periodo[3:])
-            df["data"] = pd.to_datetime(
-                df["data"].apply(
-                    lambda d: f"{ano}-{mes:02d}-01" if pd.notna(d) else None
-                ),
-                errors="coerce",
-            )
-
-            buf = io.BytesIO()
-            buf.name = nome_arquivo
-            df.to_parquet(buf)
+            df = df.copy()
+            df["data"] = pd.Timestamp(year=ano, month=mes, day=1)
+            df["periodo"] = f"{ano}-{mes:02d}"
 
             self.dialog_periodo_aberto = False
             self.carregando_importacao = True
-            yield
-
             self.import_status = ""
             self.import_mensagem = "Periodo definido. Processando importacao..."
             yield
 
+            resultado = logic_importacao.executar_importacao_dataframe(
+                df,
+                empresa_nome,
+                empresa_cnpj,
+                nome_arquivo,
+            )
+
+            if resultado.get("requer_confirmacao"):
+                self._preparar_confirmacao_substituicao(resultado, nome_arquivo)
+                return
+
+            if resultado.get("sucesso"):
+                registros = resultado["registros_salvos"]
+                self.import_status = "sucesso"
+                self.import_registros = registros
+                self.import_avisos = resultado.get("avisos", [])
+                self.import_mensagem = (
+                    f"{registros} lancamento(s) importado(s) com sucesso."
+                )
+
+                empresa_id = resultado["empresa_id"]
+                periodo_salvo = resultado["periodo"]
+                df_salvo = resultado.get("df")
+                self.import_mensagem += self._executar_rotinas_pos_importacao(
+                    df_salvo, empresa_id, periodo_salvo
+                )
+
+                self.importar_empresa = ""
+                self.importar_cnpj = ""
+                self.empresa_selecionada = ""
+                self.periodo_selecionado = ""
+                self.lancamentos = []
+                return
+
+            self.import_status = "erro"
+            erro_msg = resultado.get("erro", "Erro desconhecido ao importar.")
+            self.import_mensagem = erro_msg
+            if ";" in erro_msg:
+                self.import_erros = [e.strip() for e in erro_msg.split(";") if e.strip()]
+            else:
+                self.import_erros = [erro_msg]
+
         except Exception as exc:
             logger.error("Erro ao definir periodo manual: %s", exc)
+            self.import_status = "erro"
             self.import_mensagem = f"Erro ao processar periodo: {exc}"
+            self.import_erros = [str(exc)]
+        finally:
+            self.carregando_importacao = False
+            self.periodo_manual_input = ""
+            self.periodo_manual_df_json = ""
+            self.periodo_manual_nome_arquivo = ""
 
     def cancelar_periodo_manual(self):
         self.dialog_periodo_aberto = False
@@ -370,8 +430,6 @@ class DadosState(rx.State):
     def confirmar_substituicao(self):
         import pandas as pd
         from contaview.logic import importacao as logic_importacao
-        from contaview.logic import conciliacao as logic_conciliacao
-        from contaview.logic import auditoria as logic_auditoria
 
         try:
             df = pd.read_json(self.confirmacao_pendente_df_json, orient="split")
@@ -396,23 +454,9 @@ class DadosState(rx.State):
                 periodo = self.confirmacao_pendente_periodo
 
                 if not df.empty and empresa_id and periodo:
-                    try:
-                        conc_res = logic_conciliacao.conciliar_partidas(df)
-                        logic_conciliacao.salvar_resultado_conciliacao(
-                            empresa_id, periodo, conc_res
-                        )
-                        oc_res = logic_auditoria.auditar_lancamentos(df)
-                        logic_auditoria.salvar_ocorrencias(oc_res, empresa_id)
-                        resumo = logic_auditoria.resumo_auditoria(oc_res)
-                        self.import_mensagem += (
-                            f" Auditoria: {resumo['alta']} alta(s), "
-                            f"{resumo['media']} media(s), "
-                            f"{resumo['baixa']} baixa(s)."
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Auditoria/conciliacao apos substituicao: %s", exc
-                        )
+                    self.import_mensagem += self._executar_rotinas_pos_importacao(
+                        df, empresa_id, periodo
+                    )
 
                 self.importar_empresa = ""
                 self.importar_cnpj = ""
@@ -786,3 +830,29 @@ class DadosState(rx.State):
         ))
 
         return fig
+
+    def abrir_renomear_empresa(self):
+        if not self.empresa_selecionada:
+            return
+        self.renomear_empresa_nome_atual = self.empresa_selecionada
+        self.renomear_empresa_nome = self.empresa_selecionada
+        self.dialog_renomear_aberto = True
+
+    def set_renomear_empresa_nome(self, valor: str):
+        self.renomear_empresa_nome = valor
+
+    def confirmar_renomear_empresa(self):
+        from contaview.logic import database
+
+        novo_nome = self.renomear_empresa_nome.strip()
+        if not novo_nome:
+            return
+        empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
+        if empresa_id:
+            database.renomear_empresa(empresa_id, novo_nome)
+            self.carregar_empresas()
+            self.empresa_selecionada = novo_nome
+        self.dialog_renomear_aberto = False
+
+    def cancelar_renomear_empresa(self):
+        self.dialog_renomear_aberto = False
