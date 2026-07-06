@@ -12,16 +12,17 @@ from contaview.pages.conciliacao import conciliacao
 from contaview.pages.auditoria import auditoria
 from contaview.pages.relatorios import relatorios
 from contaview.pages.assistente import assistente
+from contaview.state.dados_state import DadosState
 
 app = rx.App(
     stylesheets=["styles.css"],
 )
 
 app.add_page(login, route="/")
-app.add_page(painel, route="/painel")
-app.add_page(lancamentos, route="/lancamentos")
-app.add_page(importar, route="/importar")
-app.add_page(conciliacao, route="/conciliacao")
-app.add_page(auditoria, route="/auditoria")
-app.add_page(relatorios, route="/relatorios")
+app.add_page(painel, route="/painel", on_load=DadosState.carregar_empresas)
+app.add_page(lancamentos, route="/lancamentos", on_load=DadosState.carregar_empresas)
+app.add_page(importar, route="/importar", on_load=DadosState.carregar_empresas)
+app.add_page(conciliacao, route="/conciliacao", on_load=DadosState.carregar_empresas)
+app.add_page(auditoria, route="/auditoria", on_load=DadosState.carregar_empresas)
+app.add_page(relatorios, route="/relatorios", on_load=DadosState.carregar_empresas)
 app.add_page(assistente, route="/assistente")
