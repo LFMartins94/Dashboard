@@ -35,14 +35,14 @@ class DadosState(rx.State):
     # Confirmacao de substituicao
     confirmacao_pendente_empresa_id: int = 0
     confirmacao_pendente_periodo: str = ""
-    confirmacao_pendente_df_json: str = ""
-    confirmacao_pendente_nome: str = ""
+    confirmacao_pendente_caminho_temp: str = ""
+    confirmacao_pendente_nome_arquivo: str = ""
     alert_dialog_open: bool = False
 
     # Dialogo de periodo manual (arquivo 100% ambiguo)
     dialog_periodo_aberto: bool = False
     periodo_manual_input: str = ""
-    periodo_manual_df_json: str = ""
+    periodo_manual_caminho_temp: str = ""
     periodo_manual_nome_arquivo: str = ""
 
     # Conciliacao
@@ -196,12 +196,13 @@ class DadosState(rx.State):
             logger.warning("Auditoria/conciliacao automatica apos import: %s", exc)
             return ""
 
-    def _preparar_confirmacao_substituicao(self, resultado: dict, nome_arquivo: str):
-        df = resultado["df"]
+    def _preparar_confirmacao_substituicao(
+        self, resultado: dict, nome_arquivo: str, caminho_temp: str,
+    ):
         self.confirmacao_pendente_empresa_id = resultado["empresa_id"]
         self.confirmacao_pendente_periodo = resultado["periodo"]
-        self.confirmacao_pendente_df_json = df.to_json(orient="split")
-        self.confirmacao_pendente_nome = nome_arquivo
+        self.confirmacao_pendente_caminho_temp = caminho_temp
+        self.confirmacao_pendente_nome_arquivo = nome_arquivo
         self.alert_dialog_open = True
         self.import_status = "confirmacao"
 
@@ -255,6 +256,7 @@ class DadosState(rx.State):
         self.import_erros = []
         self.import_avisos = []
         self.import_registros = 0
+        caminho_temp = ""
         yield
 
         try:
@@ -268,6 +270,8 @@ class DadosState(rx.State):
             nome_arquivo = file.filename or "arquivo"
             empresa_nome = self.importar_empresa.strip() or self._derivar_nome_empresa(nome_arquivo)
 
+            caminho_temp = logic_importacao.salvar_arquivo_temp(content, nome_arquivo)
+
             buf = io.BytesIO(content)
             buf.name = nome_arquivo
 
@@ -278,8 +282,10 @@ class DadosState(rx.State):
             )
 
             if resultado.get("periodo_necessario"):
-                df = resultado["df"]
-                self.periodo_manual_df_json = df.to_json(orient="split")
+                df_parcial = resultado["df"]
+                caminho_pkl = caminho_temp + ".pkl"
+                df_parcial.to_pickle(caminho_pkl)
+                self.periodo_manual_caminho_temp = caminho_pkl
                 self.periodo_manual_nome_arquivo = nome_arquivo
                 self.dialog_periodo_aberto = True
                 self.import_status = "periodo_necessario"
@@ -291,8 +297,13 @@ class DadosState(rx.State):
                 return
 
             if resultado.get("requer_confirmacao"):
-                self._preparar_confirmacao_substituicao(resultado, nome_arquivo)
+                self._preparar_confirmacao_substituicao(
+                    resultado, nome_arquivo, caminho_temp,
+                )
                 return
+
+            logic_importacao.limpar_arquivo_temp(caminho_temp)
+            caminho_temp = ""
 
             if resultado.get("sucesso"):
                 registros = resultado["registros_salvos"]
@@ -332,11 +343,13 @@ class DadosState(rx.State):
             self.import_erros = [str(exc)]
         finally:
             self.carregando_importacao = False
+            logic_importacao.limpar_arquivo_temp(caminho_temp)
 
     def set_periodo_manual_input(self, valor: str):
         self.periodo_manual_input = valor
 
     def definir_periodo_manual(self):
+        import os
         import re
         import pandas as pd
         from contaview.logic import importacao as logic_importacao
@@ -352,8 +365,13 @@ class DadosState(rx.State):
             self.import_mensagem = "Mes invalido. Use MM/AAAA (ex: 05/2026)."
             return
 
+        caminho_pkl = self.periodo_manual_caminho_temp
+        caminho_original = ""
+        if caminho_pkl and caminho_pkl.endswith(".pkl"):
+            caminho_original = caminho_pkl[:-4]
+
         try:
-            df = pd.read_json(self.periodo_manual_df_json, orient="split")
+            df = pd.read_pickle(caminho_pkl)
             nome_arquivo = self.periodo_manual_nome_arquivo
             empresa_nome = self.importar_empresa.strip() or self._derivar_nome_empresa(nome_arquivo)
             empresa_cnpj = self.importar_cnpj.strip() or None
@@ -376,7 +394,9 @@ class DadosState(rx.State):
             )
 
             if resultado.get("requer_confirmacao"):
-                self._preparar_confirmacao_substituicao(resultado, nome_arquivo)
+                self._preparar_confirmacao_substituicao(
+                    resultado, nome_arquivo, caminho_pkl,
+                )
                 return
 
             if resultado.get("sucesso"):
@@ -418,28 +438,38 @@ class DadosState(rx.State):
         finally:
             self.carregando_importacao = False
             self.periodo_manual_input = ""
-            self.periodo_manual_df_json = ""
+            logic_importacao.limpar_arquivo_temp(caminho_pkl)
+            logic_importacao.limpar_arquivo_temp(caminho_original)
+            self.periodo_manual_caminho_temp = ""
             self.periodo_manual_nome_arquivo = ""
 
     def cancelar_periodo_manual(self):
+        from contaview.logic import importacao as logic_importacao
+
         self.dialog_periodo_aberto = False
         self.periodo_manual_input = ""
         self.import_status = ""
         self.import_mensagem = ""
+        caminho_pkl = self.periodo_manual_caminho_temp
+        caminho_original = ""
+        if caminho_pkl and caminho_pkl.endswith(".pkl"):
+            caminho_original = caminho_pkl[:-4]
+        logic_importacao.limpar_arquivo_temp(caminho_pkl)
+        logic_importacao.limpar_arquivo_temp(caminho_original)
+        self.periodo_manual_caminho_temp = ""
+        self.periodo_manual_nome_arquivo = ""
 
     def confirmar_substituicao(self):
-        import pandas as pd
         from contaview.logic import importacao as logic_importacao
 
+        caminho_temp = self.confirmacao_pendente_caminho_temp
         try:
-            df = pd.read_json(self.confirmacao_pendente_df_json, orient="split")
-            df["arquivo_origem"] = self.confirmacao_pendente_nome
-
-            resultado = logic_importacao.confirmar_substituicao(
+            resultado = logic_importacao.executar_importacao_por_caminho(
+                caminho_temp,
                 self.confirmacao_pendente_empresa_id,
                 self.confirmacao_pendente_periodo,
-                df,
             )
+            caminho_temp = ""
 
             if resultado.get("sucesso"):
                 registros = resultado["registros_salvos"]
@@ -452,10 +482,11 @@ class DadosState(rx.State):
 
                 empresa_id = self.confirmacao_pendente_empresa_id
                 periodo = self.confirmacao_pendente_periodo
+                df_salvo = resultado.get("df")
 
-                if not df.empty and empresa_id and periodo:
+                if df_salvo is not None and not df_salvo.empty and empresa_id and periodo:
                     self.import_mensagem += self._executar_rotinas_pos_importacao(
-                        df, empresa_id, periodo
+                        df_salvo, empresa_id, periodo
                     )
 
                 self.importar_empresa = ""
@@ -474,18 +505,22 @@ class DadosState(rx.State):
             self.alert_dialog_open = False
             self.confirmacao_pendente_empresa_id = 0
             self.confirmacao_pendente_periodo = ""
-            self.confirmacao_pendente_df_json = ""
-            self.confirmacao_pendente_nome = ""
+            logic_importacao.limpar_arquivo_temp(caminho_temp)
+            self.confirmacao_pendente_caminho_temp = ""
+            self.confirmacao_pendente_nome_arquivo = ""
 
     def cancelar_substituicao(self):
+        from contaview.logic import importacao as logic_importacao
+
         self.alert_dialog_open = False
         self.import_status = "erro"
         self.import_mensagem = "Importacao cancelada pelo usuario."
         self.import_erros = ["Cancelado"]
+        logic_importacao.limpar_arquivo_temp(self.confirmacao_pendente_caminho_temp)
         self.confirmacao_pendente_empresa_id = 0
         self.confirmacao_pendente_periodo = ""
-        self.confirmacao_pendente_df_json = ""
-        self.confirmacao_pendente_nome = ""
+        self.confirmacao_pendente_caminho_temp = ""
+        self.confirmacao_pendente_nome_arquivo = ""
 
     def marcar_ocorrencia_resolvida(self, ocorrencia_id: int, resolvida: bool):
         from contaview.logic import database

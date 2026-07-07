@@ -1,4 +1,7 @@
+import io
 import logging
+import os
+import uuid
 from typing import BinaryIO
 
 import pandas as pd
@@ -12,6 +15,30 @@ from contaview.logic.database import (
 from contaview.logic.parsers import ler_arquivo, limpar_dataframe, normalizar_colunas
 
 logger = logging.getLogger(__name__)
+
+TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "temp")
+
+
+def salvar_arquivo_temp(conteudo: bytes, nome_arquivo: str) -> str:
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    ext = os.path.splitext(nome_arquivo)[1] or ".tmp"
+    nome_temp = f"{uuid.uuid4().hex}{ext}"
+    caminho = os.path.join(TEMP_DIR, nome_temp)
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
+    logger.info("Arquivo temp salvo: %s", caminho)
+    return caminho
+
+
+def limpar_arquivo_temp(caminho: str):
+    if not caminho:
+        return
+    try:
+        if os.path.exists(caminho):
+            os.remove(caminho)
+            logger.info("Arquivo temp removido: %s", caminho)
+    except OSError:
+        logger.warning("Nao foi possivel remover arquivo temp: %s", caminho)
 
 COLUNAS_OBRIGATORIAS = ["data", "conta_contabil", "valor", "tipo"]
 
@@ -66,6 +93,48 @@ def executar_importacao(
     df = resultado_leitura["df"]
 
     return _executar_dataframe(df, nome_empresa, cnpj_empresa, arquivo, avisos)
+
+
+def executar_importacao_por_caminho(
+    caminho: str, empresa_id: int | None = None, periodo: str | None = None,
+) -> dict:
+    try:
+        with open(caminho, "rb") as f:
+            conteudo = f.read()
+        buf = io.BytesIO(conteudo)
+        buf.name = os.path.basename(caminho)
+
+        resultado_leitura = ler_arquivo(buf)
+        if not resultado_leitura.get("sucesso"):
+            return resultado_leitura
+
+        df = resultado_leitura["df"]
+        df = limpar_dataframe(normalizar_colunas(df))
+        avisos = resultado_leitura.get("avisos", [])
+
+        validacao = validar_pre_import(df)
+        if not validacao["valido"]:
+            return {"sucesso": False, "erro": "; ".join(validacao["erros"]), "avisos": avisos}
+
+        df = injetar_sequencial_lote(df)
+
+        if empresa_id and periodo:
+            try:
+                deletar_lancamentos_do_periodo(empresa_id, periodo)
+            except Exception as exc:
+                logger.error("Erro ao deletar periodo %s: %s", periodo, exc)
+                return {"sucesso": False, "erro": f"Erro ao substituir periodo: {exc}", "avisos": avisos}
+
+        nome_arquivo = os.path.basename(caminho)
+        df = df.copy()
+        df["arquivo_origem"] = nome_arquivo
+
+        return _salvar(df, empresa_id, avisos)
+    except Exception as exc:
+        logger.error("Erro ao importar por caminho %s: %s", caminho, exc)
+        return {"sucesso": False, "erro": f"Erro ao ler arquivo: {exc}"}
+    finally:
+        limpar_arquivo_temp(caminho)
 
 
 def executar_importacao_dataframe(

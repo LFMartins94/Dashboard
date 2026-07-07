@@ -44,6 +44,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Arquivos temporarios de upload
+temp/
+
 # SQLite local fallback (no longer used)
 *.db
 *.sqlite3
