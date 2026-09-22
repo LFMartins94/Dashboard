@@ -9,9 +9,13 @@ identificar as colunas obrigatorias.
 """
 
 import logging
+import os
+import re
 from typing import Dict, Optional
 
 import pandas as pd
+from openai import OpenAI
+from pydantic import BaseModel
 from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,17 @@ DICIONARIO_SINONIMOS: Dict[str, list[str]] = {
                   "lancamento", "obs"],
     "filial": ["filial", "unidade", "loja"],
 }
+
+
+class MapeamentoColunas(BaseModel):
+    """Sugestão estruturada; a decisão de uso pertence à contadora."""
+
+    data: str | None
+    valor: str | None
+    descricao: str | None
+    tipo: str | None
+    conta_contabil: str | None
+    filial: str | None
 
 
 def _parse_valor(raw) -> float:
@@ -99,6 +114,57 @@ def mapear_colunas(colunas_planilha: list[str]) -> Dict[str, str]:
             )
 
     return mapeamento
+
+
+def sugerir_mapeamento(colunas_planilha: list[str]) -> dict[str, str]:
+    """Usa regras locais e uma chamada de IA apenas se o mapeamento for incerto."""
+    campos = {
+        campo: coluna
+        for coluna, campo in mapear_colunas(colunas_planilha).items()
+        if campo in {"data", "valor", "tipo", "conta_contabil", "filial", "historico"}
+    }
+    if "historico" in campos:
+        campos["descricao"] = campos.pop("historico")
+    if "data" in campos and "valor" in campos:
+        return campos
+
+    chave = os.getenv("OPENAI_API_KEY")
+    if not chave:
+        return campos
+
+    # Apenas nomes de colunas entram no contexto; nenhum valor da planilha é enviado.
+    colunas_seguras = []
+    for coluna in colunas_planilha[:80]:
+        titulo = str(coluna)
+        titulo = re.sub(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b", "[documento]", titulo)
+        titulo = re.sub(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", "[documento]", titulo)
+        titulo = re.sub(r"(?<!\d)\d{11,14}(?!\d)", "[documento]", titulo)
+        colunas_seguras.append(titulo[:100])
+    try:
+        cliente = OpenAI(api_key=chave, timeout=20)
+        resposta = cliente.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Sugira quais cabeçalhos correspondem aos campos pedidos. "
+                        "Use apenas títulos presentes na lista. Responda null para "
+                        "campos não identificados. Não determine o tipo de planilha."
+                    ),
+                },
+                {"role": "user", "content": "Cabeçalhos: " + repr(colunas_seguras)},
+            ],
+            response_format=MapeamentoColunas,
+        )
+        sugestao = resposta.choices[0].message.parsed
+        if sugestao is not None:
+            for campo, coluna in sugestao.model_dump(exclude_none=True).items():
+                if coluna in colunas_planilha:
+                    campos[campo] = coluna
+    except Exception as exc:
+        logger.warning("Mapeamento por IA indisponível: %s", exc)
+    return campos
 
 
 def derivar_valor_tipo_de_debito_credito(

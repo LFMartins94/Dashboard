@@ -19,10 +19,19 @@ app = rx.App(
 )
 
 app.add_page(login, route="/")
-app.add_page(painel, route="/painel", on_load=DadosState.carregar_empresas)
-app.add_page(lancamentos, route="/lancamentos", on_load=DadosState.carregar_empresas)
+app.add_page(
+    painel, route="/painel",
+    on_load=[DadosState.carregar_empresas, DadosState.carregar_lotes_preparados],
+)
+app.add_page(
+    lancamentos, route="/lancamentos",
+    on_load=[DadosState.carregar_empresas, DadosState.carregar_lotes_preparados],
+)
 app.add_page(importar, route="/importar", on_load=DadosState.carregar_empresas)
-app.add_page(conciliacao, route="/conciliacao", on_load=DadosState.carregar_empresas)
+app.add_page(
+    conciliacao, route="/conciliacao",
+    on_load=[DadosState.carregar_empresas, DadosState.carregar_lotes_preparados],
+)
 app.add_page(auditoria, route="/auditoria", on_load=DadosState.carregar_empresas)
 app.add_page(relatorios, route="/relatorios", on_load=DadosState.carregar_empresas)
 app.add_page(assistente, route="/assistente")

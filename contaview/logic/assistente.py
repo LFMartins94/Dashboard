@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 from openai import OpenAI
 
@@ -10,19 +11,20 @@ logger = logging.getLogger(__name__)
 def _get_client() -> OpenAI | None:
     chave = os.getenv("OPENAI_API_KEY")
     if not chave:
-        logger.warning("OPENAI_API_KEY não encontrada em os.getenv")
-        try:
-            import reflex as rx
-            chave = rx.config.get("openai_api_key", "")
-        except Exception:
-            pass
-    if not chave:
         logger.error(
             "OPENAI_API_KEY não configurada em nenhuma fonte. "
             "Verifique as secrets no painel da Reflex Cloud."
         )
         return None
     return OpenAI(api_key=chave)
+
+
+def _ocultar_documentos(texto: str) -> str:
+    texto = re.sub(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b", "[CPF oculto]", texto)
+    texto = re.sub(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b", "[CNPJ oculto]", texto)
+    texto = re.sub(r"(?<!\d)\d{14}(?!\d)", "[CNPJ oculto]", texto)
+    texto = re.sub(r"(?<!\d)\d{11}(?!\d)", "[CPF oculto]", texto)
+    return texto
 
 
 _SISTEMA = (
@@ -39,7 +41,10 @@ _SISTEMA = (
 def perguntar_ao_assistente(mensagens: list[dict]) -> str:
     from contaview.logic.assistente_ferramentas import TOOL_SCHEMAS, MAP_FERRAMENTAS
 
-    historico = [{"role": "system", "content": _SISTEMA}] + mensagens
+    historico = [{"role": "system", "content": _SISTEMA}] + [
+        {**mensagem, "content": _ocultar_documentos(mensagem.get("content", ""))}
+        for mensagem in mensagens
+    ]
     client = _get_client()
     if not client:
         return "Assistente indisponivel. Verifique a chave da API."
@@ -94,17 +99,5 @@ def perguntar_ao_assistente(mensagens: list[dict]) -> str:
 
 
 def gerar_titulo_conversa(primeira_mensagem: str) -> str:
-    prompt = (
-        f"Gere um título curto (máximo 5 palavras) para uma conversa que começa com:"
-        f" '{primeira_mensagem}'. Responda apenas o título, sem aspas."
-    )
-    try:
-        client = _get_client()
-        resposta = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resposta.choices[0].message.content.strip()
-    except Exception as exc:
-        logger.error("Erro ao gerar título: %s", exc)
-        return primeira_mensagem[:40]
+    palavras = _ocultar_documentos(primeira_mensagem).strip().split()
+    return " ".join(palavras[:5])[:80] or "Nova conversa"

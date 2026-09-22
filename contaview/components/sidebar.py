@@ -9,11 +9,9 @@ from contaview.styles import MINERAL, ECLIPSE
 
 PAGINAS = [
     {"label": "Painel", "rota": "/painel", "icone": "layout-dashboard"},
-    {"label": "Lançamentos", "rota": "/lancamentos", "icone": "list"},
     {"label": "Importar", "rota": "/importar", "icone": "upload"},
+    {"label": "Dados preparados", "rota": "/lancamentos", "icone": "list"},
     {"label": "Conciliação", "rota": "/conciliacao", "icone": "arrow-left-right"},
-    {"label": "Auditoria", "rota": "/auditoria", "icone": "search"},
-    {"label": "Relatórios", "rota": "/relatorios", "icone": "file-text"},
     {"label": "Assistente", "rota": "/assistente", "icone": "message-square"},
 ]
 

@@ -31,10 +31,14 @@ def _feedback_importacao() -> rx.Component:
     return rx.vstack(
         rx.cond(
             DadosState.import_status == "sucesso",
-            rx.callout(
-                DadosState.import_mensagem,
-                icon="check",
-                color_scheme="green",
+            rx.vstack(
+                rx.callout(
+                    DadosState.import_mensagem,
+                    icon="check",
+                    color_scheme="green",
+                    width="100%",
+                ),
+                rx.link("Conferir dados preparados", href="/lancamentos"),
                 width="100%",
             ),
         ),
@@ -65,6 +69,134 @@ def _feedback_importacao() -> rx.Component:
         ),
         spacing="2",
         width="100%",
+    )
+
+
+def _campo_mapeamento(titulo: str, valor, ao_alterar) -> rx.Component:
+    return rx.vstack(
+        rx.text(titulo, font_size="13px"),
+        rx.select(
+            DadosState.preparacao_opcoes,
+            value=valor,
+            on_change=ao_alterar,
+            width="100%",
+            style=_input_style(),
+        ),
+        width="100%",
+        align="start",
+        spacing="1",
+    )
+
+
+def _previa_preparacao() -> rx.Component:
+    return rx.cond(
+        DadosState.preparacao_cabecalhos,
+        rx.vstack(
+            rx.text("Conferir arquivo", font_size="18px", font_weight="600"),
+            rx.text(DadosState.preparacao_nome_arquivo, font_size="13px"),
+            rx.select(
+                DadosState.preparacao_abas,
+                value=DadosState.preparacao_aba,
+                on_change=DadosState.set_preparacao_aba,
+                width="100%",
+                style=_input_style(),
+            ),
+            rx.hstack(
+                rx.input(
+                    placeholder="Linha do cabeçalho (0 = sem cabeçalho)",
+                    value=DadosState.preparacao_linha_cabecalho,
+                    on_change=DadosState.set_preparacao_linha_cabecalho,
+                    width="250px",
+                    style=_input_style(),
+                ),
+                rx.button(
+                    "Aplicar cabeçalho", variant="soft",
+                    on_click=DadosState.aplicar_linha_cabecalho,
+                ),
+                align="center",
+            ),
+            rx.text(
+                "A prévia mostra até 15 linhas. As linhas de dados após o cabeçalho "
+                "selecionado serão preservadas na preparação.",
+                font_size="12px",
+            ),
+            rx.box(
+                rx.data_table(
+                    data=DadosState.preparacao_linhas_preview,
+                    columns=DadosState.preparacao_cabecalhos,
+                    pagination=True,
+                ),
+                width="100%",
+                overflow_x="auto",
+            ),
+            rx.text("Tipo de documento", font_size="13px"),
+            rx.select(
+                ["Extrato bancário", "Folha de pagamento", "Notas", "Lançamentos", "Outro"],
+                placeholder="Escolha o destino dos dados",
+                value=DadosState.preparacao_tipo_documento,
+                on_change=DadosState.set_preparacao_tipo_documento,
+                width="100%",
+                style=_input_style(),
+            ),
+            rx.input(
+                placeholder="Período opcional (MM/AAAA)",
+                value=DadosState.preparacao_periodo,
+                on_change=DadosState.set_preparacao_periodo,
+                width="100%",
+                style=_input_style(),
+            ),
+            rx.text("Mapeamento de colunas", font_size="16px", font_weight="600"),
+            rx.grid(
+                _campo_mapeamento(
+                    "Data", DadosState.preparacao_mapa_data,
+                    DadosState.set_preparacao_mapa_data,
+                ),
+                _campo_mapeamento(
+                    "Valor", DadosState.preparacao_mapa_valor,
+                    DadosState.set_preparacao_mapa_valor,
+                ),
+                _campo_mapeamento(
+                    "Descrição", DadosState.preparacao_mapa_descricao,
+                    DadosState.set_preparacao_mapa_descricao,
+                ),
+                _campo_mapeamento(
+                    "Tipo C/D", DadosState.preparacao_mapa_tipo,
+                    DadosState.set_preparacao_mapa_tipo,
+                ),
+                _campo_mapeamento(
+                    "Conta contábil", DadosState.preparacao_mapa_conta,
+                    DadosState.set_preparacao_mapa_conta,
+                ),
+                _campo_mapeamento(
+                    "Filial", DadosState.preparacao_mapa_filial,
+                    DadosState.set_preparacao_mapa_filial,
+                ),
+                columns="2",
+                gap="12px",
+                width="100%",
+            ),
+            rx.hstack(
+                rx.button(
+                    "Cancelar",
+                    variant="soft",
+                    on_click=DadosState.cancelar_preparacao,
+                ),
+                rx.button(
+                    "Salvar para conferência",
+                    on_click=DadosState.confirmar_preparacao,
+                ),
+                justify="end",
+                width="100%",
+            ),
+            width="100%",
+            spacing="3",
+            padding="16px",
+            border="1px solid",
+            border_color=rx.cond(
+                TemaState.tema_escuro, ECLIPSE["border"], MINERAL["border"]
+            ),
+            border_radius="10px",
+        ),
     )
 
 
@@ -162,7 +294,7 @@ def importar() -> rx.Component:
                     ),
                 ),
                 rx.text(
-                    "Faça upload de arquivos .xlsx ou .csv com lançamentos contábeis.",
+                    "Selecione a empresa e envie uma planilha para conferência.",
                     font_size="14px",
                     color=rx.cond(
                         TemaState.tema_escuro,
@@ -176,7 +308,7 @@ def importar() -> rx.Component:
                         DadosState.empresas_disponiveis,
                         rx.select(
                             DadosState.empresas_disponiveis,
-                            placeholder="Empresa (opcional)",
+                            placeholder="Empresa obrigatória",
                             value=DadosState.importar_empresa,
                             on_change=DadosState.set_importar_empresa,
                             width="100%",
@@ -214,7 +346,7 @@ def importar() -> rx.Component:
                                 variant="soft",
                             ),
                             rx.text(
-                                "ou arraste o arquivo .xlsx ou .csv para cá",
+                                "ou arraste uma planilha XLSX, CSV ou XLS XML para cá",
                                 font_size="12px",
                                 color=rx.cond(
                                     TemaState.tema_escuro,
@@ -226,12 +358,17 @@ def importar() -> rx.Component:
                             align="center",
                             padding="32px 16px",
                         ),
-                        on_drop=DadosState.handle_upload_import,
+                        id="planilha_importacao",
+                        on_drop=DadosState.handle_upload_previa(
+                            rx.upload_files(upload_id="planilha_importacao")
+                        ),
                         accept={
-                            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            ".csv": "text/csv",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+                            "text/csv": [".csv"],
+                            "application/vnd.ms-excel": [".xls"],
                         },
                         max_files=1,
+                        max_size=20 * 1024 * 1024,
                         multiple=False,
                         border="2px dashed",
                         border_color=rx.cond(
@@ -248,12 +385,11 @@ def importar() -> rx.Component:
                         width="100%",
                     ),
                     _feedback_importacao(),
-                    _dialog_substituicao(),
-                    _dialog_periodo_manual(),
                     spacing="4",
                     width="100%",
-                    max_width="500px",
+                    max_width="720px",
                 ),
+                _previa_preparacao(),
                 width="100%",
                 height="100vh",
                 padding="24px",

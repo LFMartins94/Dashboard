@@ -1,4 +1,6 @@
 import io
+import csv
+from decimal import Decimal
 from datetime import datetime
 import pandas as pd
 
@@ -18,6 +20,128 @@ _CABECALHOS_EXCEL = {
     "filial": "Filial",
     "periodo": "Período",
 }
+
+
+def _texto_seguro_planilha(valor) -> str:
+    texto = str(valor if valor is not None else "")
+    return "'" + texto if texto.lstrip().startswith(("=", "+", "-", "@")) else texto
+
+
+def exportar_lote_preparado(linhas: list[dict], formato: str) -> bytes:
+    """Exporta dados conferidos em formato genérico, sem colunas internas."""
+    if not linhas:
+        raise ValueError("O lote não contém linhas para exportação.")
+    if any(linha["status"] != "validado" for linha in linhas):
+        raise ValueError("Resolva as pendências do lote antes de exportar.")
+    if formato not in {"csv", "xlsx"}:
+        raise ValueError("Formato de exportação inválido.")
+
+    colunas = ["Data", "Descrição", "Valor", "Tipo", "Conta contábil", "Filial"]
+    extras: list[str] = []
+    tecnicas = {"id", "empresa_id", "sequencial_lote", "origem", "arquivo_origem", "criado_em"}
+    for linha in linhas:
+        for campo in linha["dados_brutos"]:
+            if campo.casefold() not in tecnicas and campo not in extras:
+                extras.append(campo)
+    colunas.extend(f"Original: {campo}" for campo in extras)
+
+    registros = []
+    for linha in linhas:
+        data = linha.get("data")
+        valor = linha.get("valor")
+        valor_decimal = Decimal(str(valor)).quantize(Decimal("0.01")) if valor is not None else None
+        registro = {
+            "Data": data.strftime("%d/%m/%Y") if data else "",
+            "Descrição": _texto_seguro_planilha(linha.get("descricao")),
+            "Valor": str(valor_decimal).replace(".", ",") if valor_decimal is not None else "",
+            "Tipo": _texto_seguro_planilha(linha.get("tipo")),
+            "Conta contábil": _texto_seguro_planilha(linha.get("conta_contabil")),
+            "Filial": _texto_seguro_planilha(linha.get("filial")),
+        }
+        for campo in extras:
+            registro[f"Original: {campo}"] = _texto_seguro_planilha(
+                linha["dados_brutos"].get(campo, "")
+            )
+        registros.append(registro)
+
+    if formato == "csv":
+        saida = io.StringIO()
+        escritor = csv.DictWriter(saida, fieldnames=colunas, delimiter=";")
+        escritor.writeheader()
+        escritor.writerows(registros)
+        return ("\ufeff" + saida.getvalue()).encode("utf-8")
+
+    quadro = pd.DataFrame(registros, columns=colunas)
+    saida_binaria = io.BytesIO()
+    with pd.ExcelWriter(saida_binaria, engine="xlsxwriter") as escritor:
+        quadro.to_excel(escritor, sheet_name="Dados preparados", index=False)
+    return saida_binaria.getvalue()
+
+
+def exportar_cruzamento_fontes(
+    resultado: dict, fonte_1: list[dict], fonte_2: list[dict],
+) -> bytes:
+    """Exporta a revisão entre duas fontes com números de linha do arquivo."""
+    por_id_1 = {int(linha["id"]): linha for linha in fonte_1}
+    por_id_2 = {int(linha["id"]): linha for linha in fonte_2}
+    colunas = [
+        "Situação", "Linha fonte 1", "Linha fonte 2", "Data fonte 1",
+        "Data fonte 2", "Descrição fonte 1", "Descrição fonte 2",
+        "Valor fonte 1", "Valor fonte 2", "Diferença de dias",
+    ]
+
+    def data_exibida(linha: dict | None) -> str:
+        if not linha or not linha.get("data"):
+            return ""
+        data = linha["data"]
+        if hasattr(data, "strftime"):
+            return data.strftime("%d/%m/%Y")
+        return datetime.fromisoformat(str(data)).strftime("%d/%m/%Y")
+
+    def valor_exibido(linha: dict | None) -> str:
+        if not linha or linha.get("valor") is None:
+            return ""
+        return str(Decimal(str(linha["valor"])).quantize(Decimal("0.01"))).replace(".", ",")
+
+    def registro(situacao: str, a: dict | None, b: dict | None, dias="") -> dict:
+        return {
+            "Situação": situacao,
+            "Linha fonte 1": a.get("numero_linha", "") if a else "",
+            "Linha fonte 2": b.get("numero_linha", "") if b else "",
+            "Data fonte 1": data_exibida(a),
+            "Data fonte 2": data_exibida(b),
+            "Descrição fonte 1": _texto_seguro_planilha(a.get("descricao")) if a else "",
+            "Descrição fonte 2": _texto_seguro_planilha(b.get("descricao")) if b else "",
+            "Valor fonte 1": valor_exibido(a),
+            "Valor fonte 2": valor_exibido(b),
+            "Diferença de dias": dias,
+        }
+
+    registros = []
+    for chave, situacao in (
+        ("pares_confirmados", "Par exato"),
+        ("candidatos", "Candidato para revisão"),
+        ("divergencias_valor", "Diferença de valor"),
+    ):
+        for par in resultado[chave]:
+            registros.append(registro(
+                situacao, por_id_1[par["extrato_id"]],
+                por_id_2[par["referencia_id"]], par.get("dias_diferenca", ""),
+            ))
+    registros.extend(
+        registro("Sem correspondência na fonte 2", linha, None)
+        for linha in resultado["faltantes_extrato"]
+    )
+    registros.extend(
+        registro("Sem correspondência na fonte 1", None, linha)
+        for linha in resultado["faltantes_referencia"]
+    )
+
+    saida = io.StringIO()
+    escritor = csv.DictWriter(saida, fieldnames=colunas, delimiter=";")
+    escritor.writeheader()
+    escritor.writerows(registros)
+    return ("\ufeff" + saida.getvalue()).encode("utf-8")
 
 def exportar_excel(df: pd.DataFrame, titulo: str) -> bytes:
     """Gera um arquivo .xlsx em memória com formatação específica."""
@@ -74,7 +198,7 @@ def exportar_pdf(dados: dict, tipo_relatorio: str, empresa: str, periodo: str) -
     elements = []
 
     titulo = f"ContaView — Relatório de {tipo_relatorio.title()}"
-    elements.append(Paragraph(titulo, styles['h1']))
+    elements.append(Paragraph(titulo, styles['Heading1']))
     elements.append(Paragraph(f"Empresa: {empresa}", styles['Normal']))
     elements.append(Paragraph(f"Período: {periodo}", styles['Normal']))
     elements.append(Spacer(1, 0.25 * inch))

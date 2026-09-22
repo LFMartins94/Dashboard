@@ -44,8 +44,8 @@ def _tentar_criar_engine(url: str):
             conn.execute(text("SELECT 1"))
         logger.info("Engine do banco criada com sucesso.")
         return eng
-    except Exception as exc:
-        logger.warning("Falha ao conectar com URL: %s ... erro=%s", url[:50], exc)
+    except Exception:
+        logger.warning("Falha ao conectar ao banco de dados com a configuração recebida.")
         return None
 
 
@@ -53,6 +53,10 @@ def _get_engine():
     global _engine
     if _engine is not None:
         return _engine
+
+    if not os.getenv("DATABASE_URL"):
+        from dotenv import load_dotenv
+        load_dotenv()
 
     url = os.getenv("DATABASE_URL")
     if not url:
@@ -165,6 +169,11 @@ CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_conta ON lancamentos(conta_contabil);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_periodo ON lancamentos(periodo);
 CREATE INDEX IF NOT EXISTS idx_lancamentos_tipo ON lancamentos(tipo);
+CREATE INDEX IF NOT EXISTS idx_conciliacoes_empresa ON conciliacoes(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_ocorrencias_auditoria_empresa
+    ON ocorrencias_auditoria(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_ocorrencias_auditoria_lancamento
+    ON ocorrencias_auditoria(lancamento_id);
 CREATE INDEX IF NOT EXISTS idx_mensagens_conversa ON mensagens(conversa_id);
 """
 
@@ -186,6 +195,195 @@ _MIGRACOES = [
 ]
 
 
+# Migração separada: executar após revisar e preservar os dados de produção.
+# As tabelas existentes continuam disponíveis durante a transição.
+MIGRACAO_PREPARACAO = """
+CREATE TABLE IF NOT EXISTS lotes_importacao (
+    id BIGSERIAL PRIMARY KEY,
+    empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+    nome_arquivo VARCHAR(255) NOT NULL,
+    arquivo_sha256 CHAR(64) NOT NULL,
+    conteudo_original BYTEA NOT NULL,
+    aba VARCHAR(255) NOT NULL,
+    tipo_documento VARCHAR(30) NOT NULL,
+    periodo VARCHAR(7),
+    mapeamento JSONB NOT NULL DEFAULT '{}'::jsonb,
+    total_linhas INTEGER NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'em_revisao',
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (id, empresa_id),
+    CHECK (total_linhas > 0),
+    CHECK (periodo IS NULL OR periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+    CHECK (status IN ('em_revisao', 'concluido', 'cancelado'))
+);
+
+CREATE TABLE IF NOT EXISTS linhas_preparadas (
+    id BIGSERIAL PRIMARY KEY,
+    lote_id BIGINT NOT NULL,
+    empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+    numero_linha INTEGER NOT NULL,
+    dados_brutos JSONB NOT NULL,
+    data DATE,
+    descricao TEXT,
+    valor NUMERIC(14,2),
+    tipo CHAR(1),
+    conta_contabil VARCHAR(50),
+    filial VARCHAR(20),
+    status VARCHAR(20) NOT NULL DEFAULT 'pendente',
+    pendencias JSONB NOT NULL DEFAULT '[]'::jsonb,
+    alterado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lote_id, empresa_id)
+        REFERENCES lotes_importacao(id, empresa_id),
+    UNIQUE (lote_id, numero_linha),
+    CHECK (numero_linha > 0),
+    CHECK (tipo IS NULL OR tipo IN ('C', 'D')),
+    CHECK (status IN ('pendente', 'validado'))
+);
+
+CREATE TABLE IF NOT EXISTS historico_alteracoes (
+    id BIGSERIAL PRIMARY KEY,
+    tabela VARCHAR(40) NOT NULL,
+    registro_id BIGINT NOT NULL,
+    empresa_id INTEGER NOT NULL,
+    operacao VARCHAR(10) NOT NULL,
+    dados_anteriores JSONB,
+    dados_posteriores JSONB,
+    usuario VARCHAR(200) NOT NULL,
+    alterado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_lotes_importacao_empresa
+    ON lotes_importacao(empresa_id, criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_linhas_preparadas_empresa
+    ON linhas_preparadas(empresa_id, lote_id, status);
+CREATE INDEX IF NOT EXISTS idx_historico_alteracoes_registro
+    ON historico_alteracoes(tabela, registro_id, alterado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_historico_alteracoes_empresa
+    ON historico_alteracoes(empresa_id, alterado_em DESC);
+
+ALTER TABLE lotes_importacao ENABLE ROW LEVEL SECURITY;
+ALTER TABLE linhas_preparadas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historico_alteracoes ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.registrar_historico_alteracoes()
+RETURNS TRIGGER AS $$
+DECLARE
+    registro_atual JSONB;
+    registro_anterior JSONB;
+    identificador BIGINT;
+    empresa INTEGER;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        registro_anterior := to_jsonb(OLD) - 'dados_brutos';
+        identificador := OLD.id;
+        empresa := OLD.empresa_id;
+    ELSE
+        registro_atual := to_jsonb(NEW) - 'dados_brutos';
+        identificador := NEW.id;
+        empresa := NEW.empresa_id;
+        IF TG_OP = 'UPDATE' THEN
+            registro_anterior := to_jsonb(OLD) - 'dados_brutos';
+        END IF;
+    END IF;
+
+    INSERT INTO public.historico_alteracoes (
+        tabela, registro_id, empresa_id, operacao,
+        dados_anteriores, dados_posteriores, usuario
+    ) VALUES (
+        TG_TABLE_NAME, identificador, empresa, TG_OP,
+        registro_anterior, registro_atual,
+        COALESCE(NULLIF(current_setting('app.usuario', true), ''), current_user)
+    );
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog;
+
+REVOKE ALL ON FUNCTION public.registrar_historico_alteracoes()
+    FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS historico_linhas_preparadas ON linhas_preparadas;
+CREATE TRIGGER historico_linhas_preparadas
+    AFTER INSERT OR UPDATE OR DELETE ON linhas_preparadas
+    FOR EACH ROW EXECUTE FUNCTION public.registrar_historico_alteracoes();
+
+DROP TRIGGER IF EXISTS historico_lancamentos ON lancamentos;
+CREATE TRIGGER historico_lancamentos
+    AFTER INSERT OR UPDATE OR DELETE ON lancamentos
+    FOR EACH ROW EXECUTE FUNCTION public.registrar_historico_alteracoes();
+"""
+
+
+# O Reflex acessa o PostgreSQL somente no servidor. As funções da Data API
+# (anon/authenticated/service_role) não têm acesso direto a estas tabelas ou
+# sequências.
+# RLS continua habilitada para impedir exposição acidental por novos grants.
+SEGURANCA_RLS = """
+DO $$
+DECLARE
+    nome_tabela TEXT;
+    nome_sequencia TEXT;
+BEGIN
+    FOREACH nome_tabela IN ARRAY ARRAY[
+        'empresas', 'lancamentos', 'conciliacoes',
+        'ocorrencias_auditoria', 'conversas', 'mensagens',
+        'lotes_importacao', 'linhas_preparadas', 'historico_alteracoes',
+        'gastos'
+    ] LOOP
+        IF to_regclass(format('public.%I', nome_tabela)) IS NOT NULL THEN
+            EXECUTE format(
+                'ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', nome_tabela
+            );
+            EXECUTE format(
+                'REVOKE ALL ON TABLE public.%I FROM PUBLIC, anon, authenticated, service_role',
+                nome_tabela
+            );
+            nome_sequencia := pg_get_serial_sequence(
+                format('public.%I', nome_tabela), 'id'
+            );
+            IF nome_sequencia IS NOT NULL THEN
+                EXECUTE format(
+                    'REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated, service_role',
+                    nome_sequencia
+                );
+            END IF;
+        END IF;
+    END LOOP;
+
+    IF to_regprocedure('public.registrar_historico_alteracoes()') IS NOT NULL THEN
+        EXECUTE 'ALTER FUNCTION public.registrar_historico_alteracoes() SECURITY INVOKER';
+        EXECUTE 'ALTER FUNCTION public.registrar_historico_alteracoes() SET search_path = pg_catalog';
+        EXECUTE 'REVOKE ALL ON FUNCTION public.registrar_historico_alteracoes() FROM PUBLIC, anon, authenticated, service_role';
+    END IF;
+END;
+$$;
+
+-- Restringe novos objetos criados pelo mesmo papel que aplica a migração.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+    REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+    REVOKE ALL ON SEQUENCES FROM PUBLIC, anon, authenticated, service_role;
+-- EXECUTE para PUBLIC é um privilégio padrão global do PostgreSQL. A
+-- revogação limitada ao schema não remove esse privilégio herdado.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+    REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+    REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role;
+"""
+
+
+def configurar_seguranca_banco() -> None:
+    """Habilita RLS e fecha a Data API nas tabelas do ContaView."""
+    with _get_engine().begin() as conn:
+        conn.execute(text(SEGURANCA_RLS))
+
+
+def migrar_preparacao() -> None:
+    """Instala a área de preparação e a trilha de alterações em transação."""
+    with _get_engine().begin() as conn:
+        conn.exec_driver_sql(MIGRACAO_PREPARACAO)
+        conn.execute(text(SEGURANCA_RLS))
+
+
 def inicializar_banco() -> None:
     """Garante que todas as tabelas, índices e políticas RLS existam no PostgreSQL."""
     try:
@@ -193,6 +391,7 @@ def inicializar_banco() -> None:
             conn.execute(text(DDL))
             for migracao in _MIGRACOES:
                 conn.execute(text(migracao))
+            conn.execute(text(SEGURANCA_RLS))
         logger.info("Banco de dados inicializado com sucesso.")
     except SQLAlchemyError as exc:
         logger.critical(f"Falha crítica ao inicializar o banco de dados: {exc}")
@@ -235,10 +434,10 @@ def verificar_periodo_existente(empresa_id: int, periodo: str) -> bool:
     try:
         with _get_engine().connect() as conn:
             result = conn.execute(sql, {"empresa_id": empresa_id, "periodo": periodo}).scalar()
-            return result
+            return bool(result)
     except SQLAlchemyError as exc:
         logger.error(f"Erro ao verificar período {periodo} para empresa {empresa_id}: {exc}")
-        return False
+        raise
 
 
 def deletar_lancamentos_do_periodo(empresa_id: int, periodo: str) -> int:
@@ -264,11 +463,7 @@ def deletar_lancamentos_do_periodo(empresa_id: int, periodo: str) -> int:
     return deleted_count
 
 
-def salvar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str = 'arquivo') -> int:
-    """Salva um DataFrame de lançamentos contábeis usando to_sql otimizado."""
-    if df.empty:
-        return 0
-
+def _preparar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str) -> pd.DataFrame:
     df_insert = df.copy()
     df_insert['empresa_id'] = empresa_id
     df_insert['origem'] = origem
@@ -278,23 +473,269 @@ def salvar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str = 'arquivo
         'empresa_id', 'data', 'conta_contabil', 'valor', 'tipo', 'historico', 
         'filial', 'periodo', 'sequencial_lote', 'origem', 'arquivo_origem'
     ]
-    df_insert = df_insert[colunas_tabela]
+    return df_insert[colunas_tabela]
+
+
+def _inserir_lancamentos(conn, df_insert: pd.DataFrame) -> int:
+    df_insert.to_sql(
+        name="lancamentos",
+        con=conn,
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=1000,
+    )
+    return len(df_insert)
+
+
+def _definir_usuario_auditoria(conn) -> None:
+    if conn.dialect.name == "postgresql":
+        conn.execute(
+            text("SELECT set_config('app.usuario', :usuario, true)"),
+            {"usuario": os.getenv("APP_USUARIO", "contadora")},
+        )
+
+
+def salvar_lancamentos(df: pd.DataFrame, empresa_id: int, origem: str = 'arquivo') -> int:
+    """Salva lançamentos em uma transação e propaga falhas ao chamador."""
+    if df.empty:
+        return 0
+
+    df_insert = _preparar_lancamentos(df, empresa_id, origem)
 
     try:
         with _get_engine().begin() as conn:
-            registros_salvos = df_insert.to_sql(
-                name="lancamentos",
-                con=conn,
-                if_exists="append",
-                index=False,
-                method="multi",
-                chunksize=1000
-            )
+            _definir_usuario_auditoria(conn)
+            registros_salvos = _inserir_lancamentos(conn, df_insert)
         logger.info(f"{registros_salvos} lançamentos salvos com sucesso para empresa {empresa_id}.")
-        return registros_salvos if registros_salvos is not None else 0
+        return registros_salvos
     except SQLAlchemyError as exc:
         logger.error(f"Falha no bulk insert para empresa {empresa_id}: {exc}")
-        return 0
+        raise
+
+
+def substituir_lancamentos_do_periodo(
+    df: pd.DataFrame, empresa_id: int, periodo: str, origem: str = 'arquivo'
+) -> int:
+    """Substitui um período inteiro sem expor um estado parcialmente gravado."""
+    if df.empty or "periodo" not in df or df["periodo"].isna().any():
+        raise ValueError("O lote não contém um período válido para substituição.")
+    if set(df["periodo"].astype(str)) != {periodo}:
+        raise ValueError("O lote contém lançamentos de outro período.")
+
+    df_insert = _preparar_lancamentos(df, empresa_id, origem)
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        # A linha da empresa serializa substituições concorrentes da mesma empresa.
+        bloqueio = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        empresa = conn.execute(
+            text(f"SELECT id FROM empresas WHERE id = :empresa_id{bloqueio}"),
+            {"empresa_id": empresa_id},
+        ).scalar_one_or_none()
+        if empresa is None:
+            raise ValueError("Empresa não encontrada para substituição.")
+
+        parametros = {"empresa_id": empresa_id, "periodo": periodo}
+        conn.execute(text("""
+            DELETE FROM ocorrencias_auditoria
+            WHERE empresa_id = :empresa_id
+              AND lancamento_id IN (
+                  SELECT id FROM lancamentos
+                  WHERE empresa_id = :empresa_id AND periodo = :periodo
+              )
+        """), parametros)
+        conn.execute(text("""
+            DELETE FROM conciliacoes
+            WHERE empresa_id = :empresa_id AND periodo = :periodo
+        """), parametros)
+        conn.execute(text("""
+            DELETE FROM lancamentos
+            WHERE empresa_id = :empresa_id AND periodo = :periodo
+        """), parametros)
+        registros_salvos = _inserir_lancamentos(conn, df_insert)
+
+    logger.info(
+        "%d lançamentos substituídos para empresa %d / %s.",
+        registros_salvos, empresa_id, periodo,
+    )
+    return registros_salvos
+
+
+def salvar_lote_preparacao(
+    empresa_id: int, nome_arquivo: str, arquivo_sha256: str,
+    conteudo_original: bytes, aba: str, tipo_documento: str,
+    periodo: str | None, mapeamento: dict, linhas: list[dict],
+) -> dict:
+    """Grava arquivo e linhas de revisão em uma única transação."""
+    import json
+
+    if not linhas:
+        raise ValueError("Nenhuma linha foi encontrada para preparação.")
+    if tipo_documento not in {"extrato", "folha", "notas", "lancamentos", "outro"}:
+        raise ValueError("Tipo de documento inválido.")
+    mapeamento_json = json.dumps(mapeamento, ensure_ascii=False, sort_keys=True)
+
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        empresa = conn.execute(
+            text("SELECT id FROM empresas WHERE id = :empresa_id FOR UPDATE"),
+            {"empresa_id": empresa_id},
+        ).scalar_one_or_none()
+        if empresa is None:
+            raise ValueError("Empresa não encontrada para importação.")
+
+        duplicado = conn.execute(text("""
+            SELECT id FROM lotes_importacao
+            WHERE empresa_id = :empresa_id AND arquivo_sha256 = :arquivo_sha256
+              AND aba = :aba AND tipo_documento = :tipo_documento
+              AND COALESCE(periodo, '') = COALESCE(:periodo, '')
+              AND mapeamento = CAST(:mapeamento AS jsonb)
+              AND status <> 'cancelado'
+            ORDER BY id DESC LIMIT 1
+        """), {
+            "empresa_id": empresa_id, "arquivo_sha256": arquivo_sha256,
+            "aba": aba, "tipo_documento": tipo_documento, "periodo": periodo,
+            "mapeamento": mapeamento_json,
+        }).scalar_one_or_none()
+        if duplicado is not None:
+            return {"duplicado": True, "lote_id": int(duplicado)}
+
+        lote_id = conn.execute(text("""
+            INSERT INTO lotes_importacao (
+                empresa_id, nome_arquivo, arquivo_sha256, conteudo_original,
+                aba, tipo_documento, periodo, mapeamento, total_linhas
+            ) VALUES (
+                :empresa_id, :nome_arquivo, :arquivo_sha256, :conteudo_original,
+                :aba, :tipo_documento, :periodo, CAST(:mapeamento AS jsonb), :total_linhas
+            ) RETURNING id
+        """), {
+            "empresa_id": empresa_id, "nome_arquivo": nome_arquivo,
+            "arquivo_sha256": arquivo_sha256,
+            "conteudo_original": conteudo_original,
+            "aba": aba, "tipo_documento": tipo_documento,
+            "periodo": periodo,
+            "mapeamento": mapeamento_json,
+            "total_linhas": len(linhas),
+        }).scalar_one()
+
+        parametros = [
+            {
+                "lote_id": lote_id,
+                "empresa_id": empresa_id,
+                "numero_linha": linha["numero_linha"],
+                "dados_brutos": json.dumps(linha["dados_brutos"], ensure_ascii=False),
+                "data": linha.get("data"),
+                "descricao": linha.get("descricao"),
+                "valor": linha.get("valor"),
+                "tipo": linha.get("tipo"),
+                "conta_contabil": linha.get("conta_contabil"),
+                "filial": linha.get("filial"),
+                "status": linha.get("status", "pendente"),
+                "pendencias": json.dumps(linha.get("pendencias", []), ensure_ascii=False),
+            }
+            for linha in linhas
+        ]
+        conn.execute(text("""
+            INSERT INTO linhas_preparadas (
+                lote_id, empresa_id, numero_linha, dados_brutos, data,
+                descricao, valor, tipo, conta_contabil, filial, status, pendencias
+            ) VALUES (
+                :lote_id, :empresa_id, :numero_linha, CAST(:dados_brutos AS jsonb),
+                :data, :descricao, :valor, :tipo, :conta_contabil, :filial,
+                :status, CAST(:pendencias AS jsonb)
+            )
+        """), parametros)
+
+    return {"duplicado": False, "lote_id": int(lote_id), "total_linhas": len(linhas)}
+
+
+def listar_lotes_preparacao(empresa_id: int, periodo: str | None = None) -> list[dict]:
+    sql = """
+        SELECT lote.id, lote.nome_arquivo, lote.aba, lote.tipo_documento,
+               lote.periodo, lote.total_linhas, lote.status, lote.criado_em,
+               (SELECT COUNT(*) FROM linhas_preparadas linha
+                WHERE linha.lote_id = lote.id AND linha.status = 'pendente') AS pendentes
+        FROM lotes_importacao lote WHERE lote.empresa_id = :empresa_id
+    """
+    parametros = {"empresa_id": empresa_id}
+    if periodo:
+        sql += " AND lote.periodo = :periodo"
+        parametros["periodo"] = periodo
+    sql += " ORDER BY lote.criado_em DESC, lote.id DESC"
+    with _get_engine().connect() as conn:
+        return [dict(linha._mapping) for linha in conn.execute(text(sql), parametros)]
+
+
+def listar_periodos_preparacao(empresa_id: int) -> list[str]:
+    with _get_engine().connect() as conn:
+        resultado = conn.execute(text("""
+            SELECT DISTINCT periodo FROM lotes_importacao
+            WHERE empresa_id = :empresa_id AND periodo IS NOT NULL
+            ORDER BY periodo DESC
+        """), {"empresa_id": empresa_id})
+        return [linha[0] for linha in resultado]
+
+
+def carregar_linhas_preparadas(
+    empresa_id: int, lote_id: int, limite: int = 100, deslocamento: int = 0,
+) -> list[dict]:
+    with _get_engine().connect() as conn:
+        resultado = conn.execute(text("""
+            SELECT id, lote_id, numero_linha, dados_brutos, data, descricao,
+                   valor, tipo, conta_contabil, filial, status, pendencias
+            FROM linhas_preparadas
+            WHERE empresa_id = :empresa_id AND lote_id = :lote_id
+            ORDER BY numero_linha
+            LIMIT :limite OFFSET :deslocamento
+        """), {
+            "empresa_id": empresa_id, "lote_id": lote_id,
+            "limite": limite, "deslocamento": deslocamento,
+        })
+        return [dict(linha._mapping) for linha in resultado]
+
+
+def carregar_linhas_para_exportacao(empresa_id: int, lote_id: int) -> list[dict]:
+    with _get_engine().connect() as conn:
+        resultado = conn.execute(text("""
+            SELECT id, numero_linha, dados_brutos, data, descricao, valor, tipo,
+                   conta_contabil, filial, status
+            FROM linhas_preparadas
+            WHERE empresa_id = :empresa_id AND lote_id = :lote_id
+            ORDER BY numero_linha
+        """), {"empresa_id": empresa_id, "lote_id": lote_id})
+        return [dict(linha._mapping) for linha in resultado]
+
+
+def atualizar_linha_preparada(
+    empresa_id: int, linha_id: int, campos: dict, pendencias: list[str],
+) -> None:
+    import json
+
+    permitidos = {
+        "data", "descricao", "valor", "tipo", "conta_contabil", "filial"
+    }
+    if set(campos) != permitidos:
+        raise ValueError("Campos de edição incompletos ou desconhecidos.")
+    parametros = {
+        **campos,
+        "empresa_id": empresa_id,
+        "linha_id": linha_id,
+        "status": "pendente" if pendencias else "validado",
+        "pendencias": json.dumps(pendencias, ensure_ascii=False),
+    }
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        resultado = conn.execute(text("""
+            UPDATE linhas_preparadas
+            SET data = :data, descricao = :descricao, valor = :valor,
+                tipo = :tipo, conta_contabil = :conta_contabil,
+                filial = :filial, status = :status,
+                pendencias = CAST(:pendencias AS jsonb),
+                alterado_em = CURRENT_TIMESTAMP
+            WHERE id = :linha_id AND empresa_id = :empresa_id
+        """), parametros)
+        if resultado.rowcount != 1:
+            raise ValueError("Linha não encontrada para esta empresa.")
 
 # ---------------------------------------------------------------------------
 # Operações de Leitura

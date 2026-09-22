@@ -13,6 +13,7 @@ na resposta ao usuario.
 
 import logging
 import re
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -123,6 +124,13 @@ def _formatar_moeda(valor: float) -> str:
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _somar_valores(df: pd.DataFrame, tipo: str) -> Decimal:
+    return sum(
+        (Decimal(str(valor)) for valor in df.loc[df["tipo"] == tipo, "valor"]),
+        Decimal("0.00"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Ferramentas de consulta
 # ---------------------------------------------------------------------------
@@ -136,7 +144,9 @@ def consultar_saldo(empresa: str, periodo: Optional[str] = None) -> Dict[str, An
         df = database.carregar_lancamentos(params["empresa_id"], params["periodo"])
         if df.empty:
             return {"erro": "Nenhum lancamento encontrado para essa consulta."}
-        saldo = float(df["valor"].sum())
+        creditos = _somar_valores(df, "C")
+        debitos = _somar_valores(df, "D")
+        saldo = float(creditos - debitos)
         return {
             "saldo": round(saldo, 2),
             "saldo_formatado": _formatar_moeda(saldo),
@@ -157,7 +167,7 @@ def consultar_total_debitos(empresa: str, periodo: Optional[str] = None) -> Dict
         df = database.carregar_lancamentos(params["empresa_id"], params["periodo"])
         if df.empty:
             return {"erro": "Nenhum lancamento encontrado para essa consulta."}
-        total = float(df[df["tipo"] == "D"]["valor"].sum())
+        total = float(_somar_valores(df, "D"))
         return {
             "total_debitos": round(total, 2),
             "total_debitos_formatado": _formatar_moeda(total),
@@ -179,7 +189,7 @@ def consultar_total_creditos(empresa: str, periodo: Optional[str] = None) -> Dic
         df = database.carregar_lancamentos(params["empresa_id"], params["periodo"])
         if df.empty:
             return {"erro": "Nenhum lancamento encontrado para essa consulta."}
-        total = float(df[df["tipo"] == "C"]["valor"].sum())
+        total = float(_somar_valores(df, "C"))
         return {
             "total_creditos": round(total, 2),
             "total_creditos_formatado": _formatar_moeda(total),
@@ -235,14 +245,13 @@ def consultar_conciliacao(empresa: str, periodo: str) -> Dict[str, Any]:
         )
         if df.empty:
             return {"erro": "Nenhuma conciliacao encontrada para esse periodo."}
-        row = df.iloc[0].to_dict()
-        for k, v in row.items():
-            if isinstance(v, (float,)):
-                row[k] = round(v, 2)
-            if isinstance(v, pd.Timestamp):
-                row[k] = str(v)
+        row = df.iloc[0]
         return {
-            "conciliacao": row,
+            "conciliacao": {
+                "pares_ok": int(row["pares_ok"]),
+                "pares_com_erro": int(row["pares_com_erro"]),
+                "status": str(row["status"]),
+            },
             "empresa": empresa,
             "periodo": params["periodo"],
         }
@@ -264,13 +273,6 @@ def consultar_auditoria(empresa: str, periodo: str) -> Dict[str, Any]:
         )
         if df.empty:
             return {"erro": "Nenhuma ocorrencia de auditoria encontrada."}
-        ocorrencias = df.head(50).to_dict(orient="records")
-        for o in ocorrencias:
-            if "valor" in o and pd.notna(o.get("valor")):
-                o["valor"] = round(float(o["valor"]), 2)
-            for k in ("data", "criado_em"):
-                if k in o and pd.notna(o.get(k)):
-                    o[k] = str(o[k])
         resumo = {
             "alta": int((df["severidade"] == "alta").sum()),
             "media": int((df["severidade"] == "media").sum()),
@@ -278,7 +280,6 @@ def consultar_auditoria(empresa: str, periodo: str) -> Dict[str, Any]:
             "total": len(df),
         }
         return {
-            "ocorrencias": ocorrencias,
             "resumo": resumo,
             "empresa": empresa,
             "periodo": params["periodo"],
@@ -384,19 +385,6 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "consultar_lancamentos",
-            "description": "Lista os lancamentos de uma empresa, opcionalmente por periodo",
-            "parameters": _schema_periodo_opcional({
-                "limite": {
-                    "type": "integer",
-                    "description": "Maximo de registros para retornar (padrao 20)",
-                },
-            }),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "consultar_conciliacao",
             "description": "Resultado da conciliacao de uma empresa em um periodo",
             "parameters": _schema_periodo_obrigatorio(),
@@ -408,14 +396,6 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "name": "consultar_auditoria",
             "description": "Ocorrencias de auditoria de uma empresa em um periodo",
             "parameters": _schema_periodo_obrigatorio(),
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "listar_empresas_cadastradas",
-            "description": "Lista todas as empresas cadastradas no sistema",
-            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -441,9 +421,7 @@ MAP_FERRAMENTAS: Dict[str, Any] = {
     "consultar_saldo": consultar_saldo,
     "consultar_total_debitos": consultar_total_debitos,
     "consultar_total_creditos": consultar_total_creditos,
-    "consultar_lancamentos": consultar_lancamentos,
     "consultar_conciliacao": consultar_conciliacao,
     "consultar_auditoria": consultar_auditoria,
-    "listar_empresas_cadastradas": listar_empresas_cadastradas,
     "listar_periodos_empresa": listar_periodos_empresa,
 }

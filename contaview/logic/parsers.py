@@ -23,12 +23,15 @@ Sistema de detecção automática com 3 estratégias em cascata:
 """
 
 import io
+import csv
 import logging
 import re
 from datetime import date, datetime
 from typing import Any, BinaryIO
 
 import pandas as pd
+import xlrd
+from openpyxl import load_workbook
 
 from contaview.logic.leitor_xml_legado import detectar_xml_legado, ler_xml_legado
 from contaview.logic.mapeamento_colunas import mapear_colunas, derivar_valor_tipo_de_debito_credito
@@ -823,29 +826,10 @@ def resolver_datas_ambiguas(
                     mes_dominante,
                 )
             else:
-                # Fallback 3: assume formato DD/MM (padrão brasileiro)
-                # Determinar mes dominante das linhas AMBIGUAS como DD/MM
-                datas_ddmm = []
-                for t in tokens:
-                    if t and t["t1"] <= 12 and t["t2"] <= 12:
-                        try:
-                            d = date(t["ano"], t["t2"], t["t1"])
-                            datas_ddmm.append(d.month)
-                        except (ValueError, OverflowError):
-                            continue
-                if datas_ddmm:
-                    contagem_ddmm = Counter(datas_ddmm)
-                    mes_dominante = contagem_ddmm.most_common(1)[0][0]
-                    logger.info(
-                        "Datas: nenhuma inequivoca, mes dominante via DD/MM=%02d",
-                        mes_dominante,
-                    )
-                else:
-                    mes_dominante = None
-                    avisos.append(
-                        "Nao foi possivel determinar o periodo automaticamente. "
-                        "Informe o periodo manualmente na tela de importacao."
-                    )
+                avisos.append(
+                    "Não foi possível determinar o mês das datas ambíguas. "
+                    "Informe o período para confirmar a interpretação."
+                )
 
     # --- Segunda passada: resolver cada data ---
     resultados: list[date | None] = []
@@ -873,15 +857,14 @@ def resolver_datas_ambiguas(
                     # dia=t1, mes=t2 (DD/MM)
                     resultados.append(date(ano, t2, t1))
                 else:
-                    # Nenhum bate com mês dominante — fallback DD/MM
-                    resultados.append(date(ano, t2, t1))
+                    # Nenhuma interpretação pertence ao mês identificado.
+                    resultados.append(None)
                     avisos.append(
-                        f"Data ambigua nao resolvida: {t1:02d}/{t2:02d}/{ano} "
-                        f"(mes dominante={mes_dominante:02d}) — usada como DD/MM."
+                        f"Data ambígua não resolvida: {t1:02d}/{t2:02d}/{ano} "
+                        f"(mês identificado={mes_dominante:02d})."
                     )
             else:
-                # Sem mês dominante — fallback DD/MM
-                resultados.append(date(ano, t2, t1))
+                resultados.append(None)
         except (ValueError, OverflowError):
             resultados.append(None)
 
@@ -896,6 +879,50 @@ def resolver_datas_ambiguas(
     series_resultado = series_resultado.reindex(datas_raw.index)
 
     return series_resultado, avisos
+
+
+def resolver_datas_para_periodo(
+    datas_raw: pd.Series, periodo: str,
+) -> tuple[pd.Series, list[int]]:
+    """Interpreta datas brutas usando o período informado, sem inventar o dia."""
+    ano_periodo, mes_periodo = map(int, periodo.split("-"))
+    resolvidas: list[date | None] = []
+    linhas_invalidas: list[int] = []
+
+    for indice, valor in datas_raw.items():
+        candidatas: set[date] = set()
+        if isinstance(valor, (date, datetime, pd.Timestamp)) and not pd.isna(valor):
+            candidatas.add(pd.Timestamp(valor).date())
+        else:
+            texto = str(valor).strip()
+            iso = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", texto)
+            data_local = re.fullmatch(r"(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})", texto)
+            if iso:
+                try:
+                    candidatas.add(date(*map(int, iso.groups())))
+                except ValueError:
+                    pass
+            elif data_local:
+                primeiro, segundo, ano = map(int, data_local.groups())
+                if ano < 100:
+                    ano += 2000
+                for mes, dia in ((segundo, primeiro), (primeiro, segundo)):
+                    try:
+                        candidatas.add(date(ano, mes, dia))
+                    except ValueError:
+                        pass
+
+        correspondentes = [
+            d for d in candidatas
+            if d.year == ano_periodo and d.month == mes_periodo
+        ]
+        if len(correspondentes) == 1:
+            resolvidas.append(correspondentes[0])
+        else:
+            resolvidas.append(None)
+            linhas_invalidas.append(int(indice) + 1)
+
+    return pd.Series(resolvidas, index=datas_raw.index, dtype="object"), linhas_invalidas
 
 
 # ---------------------------------------------------------------------------
@@ -961,6 +988,7 @@ def ler_arquivo(arquivo: BinaryIO) -> dict:
         # Aplica o algoritmo de mes dominante para resolver datas onde
         # dia e mes sao ambos ≤ 12. Processa TODAS as datas JUNTAS.
         if "data" in df_processado.columns:
+            datas_originais = df_processado["data"].copy()
             datas_resolvidas, avisos_data = resolver_datas_ambiguas(
                 df_processado["data"],
                 nome_arquivo=nome,
@@ -984,7 +1012,7 @@ def ler_arquivo(arquivo: BinaryIO) -> dict:
                 # Nenhuma data resolvida — precisa de periodo manual
                 return {
                     "sucesso": False,
-                    "df": df_processado,
+                    "df": df_processado.assign(data=datas_originais),
                     "periodo_necessario": True,
                     "linhas_lidas": len(df_processado),
                     "linhas_descartadas": 0,
@@ -996,17 +1024,14 @@ def ler_arquivo(arquivo: BinaryIO) -> dict:
         df_limpo = limpar_dataframe(df_normalizado)
         linhas_descartadas = linhas_lidas - len(df_limpo)
 
-        # --- Fallback de data via periodo extraido (se coluna data nao existe) ---
-        if periodo_extraido and (
-            "data" not in df_limpo.columns or df_limpo["data"].isna().all()
-        ):
-            data_fim = pd.Timestamp(periodo_extraido[1])
-            df_limpo["data"] = data_fim
-            df_limpo["periodo"] = data_fim.strftime("%Y-%m")
-            avisos.append(
-                "Data nao encontrada como coluna — usada data do "
-                "periodo extraido do cabecalho do arquivo."
-            )
+        if "data" not in df_limpo.columns or df_limpo["data"].isna().any():
+            return {
+                "sucesso": False, "df": df_limpo,
+                "linhas_lidas": linhas_lidas,
+                "linhas_descartadas": linhas_descartadas,
+                "motivo_falha": "Há linhas sem data válida; revise as datas antes de importar.",
+                "avisos": avisos,
+            }
 
         # --- Aviso de tipo nao identificado ---
         if "tipo" in df_limpo.columns:
@@ -1276,3 +1301,201 @@ def processar_arquivo(arquivo: BinaryIO) -> tuple[pd.DataFrame, str]:
         return _df_vazio(), "imagem"
     else:
         raise ValueError(f"Extensão '.{ext}' não suportada. Use: xlsx, csv, pdf, pptx, png, jpg ou jpeg.")
+
+
+def _texto_celula(valor: Any) -> str:
+    if valor is None:
+        return ""
+    if isinstance(valor, (date, datetime)):
+        return valor.strftime("%d/%m/%Y")
+    return str(valor).strip()
+
+
+def _expandir_linha_planilha(valores: list[Any]) -> list[str]:
+    celulas = [_texto_celula(valor) for valor in valores]
+    preenchidas = [celula for celula in celulas if celula]
+    if len(preenchidas) == 1 and ";" in preenchidas[0]:
+        return [parte.strip() for parte in next(csv.reader([preenchidas[0]], delimiter=";"))]
+    while celulas and not celulas[-1]:
+        celulas.pop()
+    return celulas
+
+
+def _organizar_aba_previa(
+    nome: str, linhas: list[list[Any]], linha_cabecalho: int | None = None,
+) -> dict | None:
+    linhas_com_numero = [
+        (numero, _expandir_linha_planilha(linha))
+        for numero, linha in enumerate(linhas, start=1)
+    ]
+    linhas_com_numero = [
+        (numero, valores) for numero, valores in linhas_com_numero
+        if any(valores)
+    ]
+    if not linhas_com_numero:
+        return None
+
+    candidatos = linhas_com_numero[:30]
+    marcadores = (
+        "data", "valor", "débito", "debito", "crédito", "credito",
+        "histórico", "historico", "descrição", "descricao", "conta",
+        "tipo", "filial", "nome", "documento", "cnpj", "cpf",
+    )
+    pontuacoes = [
+        sum(any(marcador in valor.casefold() for marcador in marcadores)
+            for valor in valores if valor)
+        for _, valores in candidatos
+    ]
+    melhor = max(range(len(candidatos)), key=lambda i: pontuacoes[i])
+    if pontuacoes[melhor] < 2:
+        melhor = -1
+    if linha_cabecalho is not None:
+        if linha_cabecalho < 0:
+            raise ValueError("A linha do cabeçalho não pode ser negativa.")
+        if linha_cabecalho == 0:
+            melhor = -1
+        else:
+            candidatos = linhas_com_numero
+            melhor = next(
+                (i for i, (numero, _) in enumerate(candidatos)
+                 if numero == linha_cabecalho),
+                -1,
+            )
+            if melhor < 0:
+                raise ValueError("A linha do cabeçalho não foi encontrada na aba.")
+
+    if melhor >= 0:
+        numero_cabecalho, cabecalhos_brutos = candidatos[melhor]
+        inicio_dados = numero_cabecalho + 1
+        largura = max(len(cabecalhos_brutos), *(len(v) for n, v in linhas_com_numero if n >= inicio_dados))
+        cabecalhos = [
+            cabecalhos_brutos[i] if i < len(cabecalhos_brutos) and cabecalhos_brutos[i]
+            else f"Coluna {i + 1}"
+            for i in range(largura)
+        ]
+    else:
+        numero_cabecalho = 0
+        inicio_dados = 1
+        largura = max(len(v) for _, v in linhas_com_numero)
+        cabecalhos = [f"Coluna {i + 1}" for i in range(largura)]
+
+    # Títulos duplicados precisam de identificadores distintos no mapeamento.
+    contagem: dict[str, int] = {}
+    for indice, titulo in enumerate(cabecalhos):
+        contagem[titulo] = contagem.get(titulo, 0) + 1
+        if contagem[titulo] > 1:
+            cabecalhos[indice] = f"{titulo} ({contagem[titulo]})"
+
+    registros = [
+        {
+            "numero_linha": numero,
+            "valores": {
+                cabecalhos[indice]: valores[indice] if indice < len(valores) else ""
+                for indice in range(largura)
+            },
+        }
+        for numero, valores in linhas_com_numero
+        if numero >= inicio_dados
+    ]
+    if not registros:
+        return None
+    return {
+        "nome": nome,
+        "linha_cabecalho": numero_cabecalho,
+        "cabecalhos": cabecalhos,
+        "linhas": registros,
+        "total_linhas": len(registros),
+    }
+
+
+def inspecionar_planilha(
+    arquivo: BinaryIO, linha_cabecalho: int | None = None,
+    aba_alvo: str | None = None,
+) -> dict:
+    """Lê a estrutura original para prévia sem presumir destino contábil."""
+    nome = getattr(arquivo, "name", "arquivo")
+    extensao = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+    if extensao not in ("xlsx", "csv", "xls"):
+        return {"sucesso": False, "erro": "Formato não suportado. Use XLSX, CSV ou XLS XML."}
+
+    conteudo = arquivo.read()
+    arquivo.seek(0)
+    if len(conteudo) > 20 * 1024 * 1024:
+        return {"sucesso": False, "erro": "Arquivo maior que 20 MB; divida-o antes de importar."}
+
+    abas_brutas: list[tuple[str, list[list[Any]]]] = []
+    try:
+        if extensao == "xlsx":
+            pasta = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+            try:
+                for aba in pasta.worksheets:
+                    linhas = []
+                    for linha in aba.iter_rows(values_only=True):
+                        linhas.append(list(linha))
+                        if len(linhas) > 30000:
+                            raise ValueError("A aba excede 30.000 linhas; divida o arquivo.")
+                    abas_brutas.append((aba.title, linhas))
+            finally:
+                pasta.close()
+        elif extensao == "xls":
+            if detectar_xml_legado(conteudo[:200]):
+                abas_brutas = [
+                    (nome_aba, quadro.fillna("").values.tolist())
+                    for nome_aba, quadro in ler_xml_legado(conteudo).items()
+                ]
+            else:
+                pasta = xlrd.open_workbook(file_contents=conteudo, on_demand=True)
+                try:
+                    for aba in pasta.sheets():
+                        if aba.nrows > 30000:
+                            raise ValueError("A aba excede 30.000 linhas; divida o arquivo.")
+                        linhas = []
+                        for indice_linha in range(aba.nrows):
+                            valores = []
+                            for celula in aba.row(indice_linha):
+                                if celula.ctype == xlrd.XL_CELL_DATE:
+                                    valores.append(xlrd.xldate_as_datetime(
+                                        celula.value, pasta.datemode
+                                    ))
+                                elif celula.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                                    valores.append("")
+                                else:
+                                    valores.append(celula.value)
+                            linhas.append(valores)
+                        abas_brutas.append((aba.name, linhas))
+                finally:
+                    pasta.release_resources()
+        else:
+            texto = None
+            for codificacao in ("utf-8-sig", "cp1252", "latin-1"):
+                try:
+                    texto = conteudo.decode(codificacao)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if texto is None:
+                raise ValueError("Não foi possível identificar a codificação do CSV.")
+            try:
+                dialeto = csv.Sniffer().sniff(texto[:4096], delimiters=";,\t|")
+                delimitador = dialeto.delimiter
+            except csv.Error:
+                primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
+                delimitador = ";" if primeira_linha.count(";") >= primeira_linha.count(",") else ","
+            linhas = list(csv.reader(io.StringIO(texto), delimiter=delimitador))
+            if len(linhas) > 30000:
+                raise ValueError("O CSV excede 30.000 linhas; divida o arquivo.")
+            abas_brutas.append(("Planilha", linhas))
+
+        abas = [
+            organizada for nome_aba, linhas in abas_brutas
+            if (organizada := _organizar_aba_previa(
+                nome_aba, linhas,
+                linha_cabecalho if nome_aba == aba_alvo else None,
+            )) is not None
+        ]
+        if not abas:
+            raise ValueError("O arquivo não contém linhas para conferência.")
+        return {"sucesso": True, "abas": abas}
+    except Exception as exc:
+        logger.error("Falha ao inspecionar planilha '%s': %s", nome, exc)
+        return {"sucesso": False, "erro": str(exc)}

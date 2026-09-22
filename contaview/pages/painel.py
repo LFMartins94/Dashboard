@@ -90,6 +90,16 @@ def painel() -> rx.Component:
                     rx.spinner(),
                     rx.vstack(
                         rx.grid(
+                            kpi_card("Arquivos preparados", DadosState.total_lotes_preparados, "neutro"),
+                            kpi_card("Linhas preparadas", DadosState.total_linhas_preparadas, "neutro"),
+                            kpi_card("Linhas pendentes", DadosState.total_linhas_pendentes, "negativo"),
+                            columns="3",
+                            spacing="4",
+                            width="100%",
+                        ),
+                        rx.link("Conferir dados preparados", href="/lancamentos"),
+                        rx.text("Lançamentos classificados", font_size="18px", font_weight="600"),
+                        rx.grid(
                             kpi_card(
                                 "Débitos",
                                 rx.cond(
