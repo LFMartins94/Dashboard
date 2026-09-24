@@ -9,6 +9,52 @@ from contaview.utils.formatacao import formatar_moeda
 from contaview.styles import MINERAL, ECLIPSE
 
 
+def _estado_vazio_graficos() -> rx.Component:
+    return rx.card(
+        rx.vstack(
+            rx.text(
+                "Gráficos do período",
+                font_size="16px",
+                font_weight="600",
+                color=rx.cond(
+                    TemaState.tema_escuro,
+                    ECLIPSE["text_primary"],
+                    MINERAL["text_primary"],
+                ),
+            ),
+            rx.text(
+                rx.cond(
+                    DadosState.empresa_selecionada == "",
+                    "Selecione uma empresa e um período para visualizar os dados.",
+                    rx.cond(
+                        DadosState.periodo_selecionado == "",
+                        "Selecione um período para visualizar os dados da empresa.",
+                        "Nenhum lançamento foi encontrado para o período selecionado.",
+                    ),
+                ),
+                font_size="14px",
+                text_align="center",
+                color=rx.cond(
+                    TemaState.tema_escuro,
+                    ECLIPSE["text_secondary"],
+                    MINERAL["text_secondary"],
+                ),
+            ),
+            align="center",
+            justify="center",
+            spacing="2",
+            min_height="300px",
+            width="100%",
+        ),
+        width="100%",
+        background=rx.cond(
+            TemaState.tema_escuro,
+            ECLIPSE["card_bg"],
+            MINERAL["card_bg"],
+        ),
+    )
+
+
 def painel() -> rx.Component:
     return pagina_protegida(
         rx.hstack(
@@ -139,28 +185,32 @@ def painel() -> rx.Component:
                             spacing="4",
                             width="100%",
                         ),
-                        rx.grid(
-                            rx.card(
-                                rx.plotly(data=DadosState.fig_mensal),
-                                width="100%",
-                                background=rx.cond(
-                                    TemaState.tema_escuro,
-                                    ECLIPSE["card_bg"],
-                                    MINERAL["card_bg"],
+                        rx.cond(
+                            DadosState.lancamentos,
+                            rx.grid(
+                                rx.card(
+                                    rx.plotly(data=DadosState.fig_mensal),
+                                    width="100%",
+                                    background=rx.cond(
+                                        TemaState.tema_escuro,
+                                        ECLIPSE["card_bg"],
+                                        MINERAL["card_bg"],
+                                    ),
                                 ),
-                            ),
-                            rx.card(
-                                rx.plotly(data=DadosState.fig_top_contas),
-                                width="100%",
-                                background=rx.cond(
-                                    TemaState.tema_escuro,
-                                    ECLIPSE["card_bg"],
-                                    MINERAL["card_bg"],
+                                rx.card(
+                                    rx.plotly(data=DadosState.fig_top_contas),
+                                    width="100%",
+                                    background=rx.cond(
+                                        TemaState.tema_escuro,
+                                        ECLIPSE["card_bg"],
+                                        MINERAL["card_bg"],
+                                    ),
                                 ),
+                                columns="2",
+                                spacing="4",
+                                width="100%",
                             ),
-                            columns="2",
-                            spacing="4",
-                            width="100%",
+                            _estado_vazio_graficos(),
                         ),
                         spacing="4",
                         width="100%",
