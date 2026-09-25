@@ -27,16 +27,19 @@ class AuthState(rx.State):
                 datetime.now(timezone.utc).isoformat(),
                 len(usuario_input), len(senha_input),
                 len(usuario_correto), len(senha_correta),
-                usuario_input == usuario_correto,
+                usuario_input.casefold() == usuario_correto.casefold(),
                 senha_input == senha_correta,
             )
 
-            if usuario_input == usuario_correto and senha_input == senha_correta:
+            if (
+                usuario_input.casefold() == usuario_correto.casefold()
+                and senha_input == senha_correta
+            ):
                 self.autenticado = True
-                self.usuario = usuario_input
+                self.usuario = usuario_correto or usuario_input
                 yield rx.redirect("/painel")
                 return
-            yield rx.window_alert("Usuario ou senha incorretos.")
+            yield rx.window_alert("Usuário ou senha incorretos.")
         except Exception as exc:
             logger.error("Erro no login: %s", exc)
             yield rx.window_alert("Erro interno. Tente novamente.")

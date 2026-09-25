@@ -26,7 +26,7 @@ def _input_style() -> dict:
 
 
 def login() -> rx.Component:
-    return rx.center(
+    return rx.flex(
         rx.cond(
             rx.State.is_hydrated,
             rx.form.root(
@@ -153,6 +153,9 @@ def login() -> rx.Component:
         ),
         height="100vh",
         width="100%",
+        align="center",
+        justify="center",
+        direction="column",
         background=rx.cond(
             TemaState.tema_escuro,
             ECLIPSE["content_bg"],
