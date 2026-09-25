@@ -27,9 +27,7 @@ def _input_style() -> dict:
 
 def login() -> rx.Component:
     return rx.flex(
-        rx.cond(
-            rx.State.is_hydrated,
-            rx.form.root(
+        rx.form.root(
                 rx.vstack(
                     rx.vstack(
                         rx.text(
@@ -118,39 +116,6 @@ def login() -> rx.Component:
                 on_submit=AuthState.fazer_login_submit,
                 reset_on_submit=False,
             ),
-            rx.vstack(
-                rx.text(
-                    "Conta",
-                    rx.text.span(
-                        "View",
-                        color=rx.cond(
-                            TemaState.tema_escuro,
-                            ECLIPSE["accent"],
-                            MINERAL["accent"],
-                        ),
-                    ),
-                    size="5",
-                    weight="bold",
-                    color=rx.cond(
-                        TemaState.tema_escuro,
-                        ECLIPSE["text_primary"],
-                        MINERAL["text_primary"],
-                    ),
-                ),
-                rx.text(
-                    "Conectando ao servidor...",
-                    size="2",
-                    color=rx.cond(
-                        TemaState.tema_escuro,
-                        ECLIPSE["text_secondary"],
-                        MINERAL["text_secondary"],
-                    ),
-                ),
-                spacing="3",
-                padding="32px",
-                align="center",
-            ),
-        ),
         height="100vh",
         width="100%",
         align="center",
