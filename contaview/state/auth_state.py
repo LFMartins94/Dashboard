@@ -39,7 +39,7 @@ class AuthState(rx.State):
                 self.usuario = usuario_correto or usuario_input
                 yield rx.redirect("/painel")
                 return
-            yield rx.window_alert("Usuário ou senha incorretos.")
+            yield rx.window_alert("Usu\u00e1rio ou senha incorretos.")
         except Exception as exc:
             logger.error("Erro no login: %s", exc)
             yield rx.window_alert("Erro interno. Tente novamente.")
