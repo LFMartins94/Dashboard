@@ -10,12 +10,18 @@ def _bolha_mensagem(mensagem: dict) -> rx.Component:
     papel = mensagem["role"]
     conteudo = mensagem["content"]
     return rx.box(
-        rx.text(
+        rx.markdown(
             conteudo,
-            font_size="14px",
-            color=rx.cond(
-                TemaState.tema_escuro, ECLIPSE["text_primary"], MINERAL["text_primary"],
-            ),
+            use_math=False,
+            use_gfm=True,
+            style={
+                "font_size": "14px",
+                "color": rx.cond(
+                    TemaState.tema_escuro,
+                    ECLIPSE["text_primary"],
+                    MINERAL["text_primary"],
+                ),
+            },
         ),
         align_self=rx.cond(
             papel == "user",

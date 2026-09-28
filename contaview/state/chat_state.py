@@ -51,8 +51,6 @@ class ChatState(rx.State):
         if not self._sessao_valida():
             return rx.redirect("/")
         self.carregar_conversas()
-        if self.conversa_ativa is None:
-            return ChatState.nova_conversa
 
     def selecionar_conversa(self, conversa_id: int):
         from contaview.logic import database
