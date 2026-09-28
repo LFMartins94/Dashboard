@@ -111,6 +111,8 @@ def login() -> rx.Component:
                     ),
                     border_radius="10px",
                     padding="32px",
+                    margin_left="auto",
+                    margin_right="auto",
                     box_shadow="0 4px 12px rgba(0,0,0,0.1)",
                 ),
                 on_submit=AuthState.fazer_login_submit,
