@@ -8,27 +8,29 @@ from contaview.logic.database import inserir_ocorrencias
 logger = logging.getLogger(__name__)
 
 
+def _lancamento_id(linha: pd.Series) -> int | None:
+    valor = linha.get("id")
+    if valor is None or pd.isna(valor):
+        return None
+    return int(valor)
+
+
 def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
     ocorrencias: list[dict] = []
 
     # a. DUPLICIDADE (alta)
     dup_mask = df.duplicated(subset=["data", "conta_contabil", "valor", "tipo"], keep=False)
     duplicados = df[dup_mask]
-    indices_dup = set(duplicados.index)
-    ocorrencias_por_grupo: set[tuple] = set()
     for _, row in duplicados.iterrows():
-        chave = (row["data"], row["conta_contabil"], row["valor"], row["tipo"])
-        if chave not in ocorrencias_por_grupo:
-            ocorrencias_por_grupo.add(chave)
-            ocorrencias.append({
-                "lancamento_id": None,
-                "tipo_ocorrencia": "DUPLICIDADE",
-                "descricao": (
-                    f"Lancamento duplicado: {row['conta_contabil']} "
-                    f"R$ {row['valor']:.2f} em {row['data']}"
-                ),
-                "severidade": "alta",
-            })
+        ocorrencias.append({
+            "lancamento_id": _lancamento_id(row),
+            "tipo_ocorrencia": "DUPLICIDADE",
+            "descricao": (
+                f"Lancamento duplicado: {row['conta_contabil']} "
+                f"R$ {row['valor']:.2f} em {row['data']}"
+            ),
+            "severidade": "alta",
+        })
 
     # b. SEM_PAR (alta) — roda conciliacao internamente
     try:
@@ -39,7 +41,7 @@ def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
 
     for _, row in conc_result["df_sem_par"].iterrows():
         ocorrencias.append({
-            "lancamento_id": None,
+            "lancamento_id": _lancamento_id(row),
             "tipo_ocorrencia": "SEM_PAR",
             "descricao": (
                 f"Lancamento sem par: {row['tipo'] or 'Nao classificado'} "
@@ -54,7 +56,7 @@ def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
     vazios = df_hist[df_hist["_hist_len"] < 3]
     for _, row in vazios.iterrows():
         ocorrencias.append({
-            "lancamento_id": None,
+            "lancamento_id": _lancamento_id(row),
             "tipo_ocorrencia": "HISTORICO_VAZIO",
             "descricao": (
                 f"Historico nao preenchido na conta "
@@ -71,7 +73,7 @@ def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
             anomalos = df[abs(df["valor"] - media) > 3 * std]
             for _, row in anomalos.iterrows():
                 ocorrencias.append({
-                    "lancamento_id": None,
+                    "lancamento_id": _lancamento_id(row),
                     "tipo_ocorrencia": "VALOR_ANOMALO",
                     "descricao": (
                         f"Valor atipico: R$ {row['valor']:.2f} na conta "
@@ -86,7 +88,7 @@ def auditar_lancamentos(df: pd.DataFrame) -> list[dict]:
     ]
     for _, row in invalidas.iterrows():
         ocorrencias.append({
-            "lancamento_id": None,
+            "lancamento_id": _lancamento_id(row),
             "tipo_ocorrencia": "CONTA_FORMATO_INVALIDO",
             "descricao": f"Codigo de conta fora do padrao: {row['conta_contabil']}",
             "severidade": "baixa",

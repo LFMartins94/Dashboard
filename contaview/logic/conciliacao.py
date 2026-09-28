@@ -19,7 +19,13 @@ def conciliar_partidas(df: pd.DataFrame) -> dict:
     pares: list[tuple[int, int]] = []
     indices_sem_par = set(df_ordenado.index)
 
-    for (_data, _valor), grupo in df_ordenado.groupby(["data", "valor"]):
+    # O saldo numérico sozinho não identifica uma partida. A conta passa a
+    # fazer parte da chave para não parear lançamentos de contas diferentes.
+    for (_data, _valor, _conta), grupo in df_ordenado.groupby(
+        ["data", "valor", "conta_contabil"], dropna=False
+    ):
+        if pd.isna(_conta) or not str(_conta).strip():
+            continue
         cs = grupo[grupo["tipo"] == "C"].index.tolist()
         ds = grupo[grupo["tipo"] == "D"].index.tolist()
 
@@ -99,6 +105,10 @@ def _descricao_normalizada(valor: str | None) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^A-Z0-9 ]", " ", texto.upper())).strip()
 
 
+def _conta_normalizada(valor: str | None) -> str:
+    return re.sub(r"\s+", "", str(valor or "").strip().upper())
+
+
 def _data_conciliacao(valor) -> date:
     if isinstance(valor, datetime):
         return valor.date()
@@ -124,6 +134,7 @@ def conciliar_fontes(
             _data_conciliacao(item["data"]),
             Decimal(str(item["valor"])).quantize(Decimal("0.01")),
             _descricao_normalizada(item.get("descricao")),
+            _conta_normalizada(item.get("conta_contabil")),
         )
 
     grupos_extrato: dict[tuple, list[dict]] = defaultdict(list)
@@ -160,11 +171,13 @@ def conciliar_fontes(
     candidatos: list[dict] = []
     divergencias_valor: list[dict] = []
     for origem in sem_extrato:
-        data_origem, valor_origem, descricao_origem = chave(origem)
+        data_origem, valor_origem, descricao_origem, conta_origem = chave(origem)
         for deslocamento in range(-janela_dias, janela_dias + 1):
             data_candidata = data_origem + timedelta(days=deslocamento)
             for destino in referencia_por_data.get(data_candidata, []):
-                _, valor_destino, descricao_destino = chave(destino)
+                _, valor_destino, descricao_destino, conta_destino = chave(destino)
+                if conta_origem and conta_destino and conta_origem != conta_destino:
+                    continue
                 if valor_origem != valor_destino and not descricao_origem:
                     continue
                 similaridade = SequenceMatcher(

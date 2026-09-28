@@ -909,11 +909,49 @@ def carregar_conciliacao(empresa_id: int, periodo: str) -> pd.DataFrame:
 def inserir_ocorrencias(ocorrencias: list[dict]) -> int:
     if not ocorrencias:
         return 0
-    df = pd.DataFrame(ocorrencias)
-    cols = [c for c in ("empresa_id", "lancamento_id", "tipo_ocorrencia", "descricao", "severidade") if c in df.columns]
-    df = df[cols]
     try:
         with _get_engine().begin() as conn:
+            empresas = {int(item["empresa_id"]) for item in ocorrencias}
+            existentes: set[tuple] = set()
+            for empresa_id in empresas:
+                rows = conn.execute(text("""
+                    SELECT empresa_id, lancamento_id, tipo_ocorrencia, descricao
+                    FROM ocorrencias_auditoria
+                    WHERE empresa_id = :empresa_id
+                """), {"empresa_id": empresa_id})
+                existentes.update(
+                    (
+                        int(row[0]),
+                        int(row[1]) if row[1] is not None else None,
+                        row[2],
+                        row[3],
+                    )
+                    for row in rows
+                )
+
+            novos = []
+            vistos = set(existentes)
+            for item in ocorrencias:
+                chave = (
+                    int(item["empresa_id"]),
+                    int(item["lancamento_id"]) if item.get("lancamento_id") is not None else None,
+                    item["tipo_ocorrencia"],
+                    item["descricao"],
+                )
+                if chave in vistos:
+                    continue
+                vistos.add(chave)
+                novos.append(item)
+            if not novos:
+                return 0
+            df = pd.DataFrame(novos)
+            cols = [
+                c for c in (
+                    "empresa_id", "lancamento_id", "tipo_ocorrencia",
+                    "descricao", "severidade",
+                ) if c in df.columns
+            ]
+            df = df[cols]
             registros = df.to_sql("ocorrencias_auditoria", conn, if_exists="append", index=False, method="multi", chunksize=500)
         logger.info("%d ocorrencias salvas.", registros or 0)
         return registros or 0

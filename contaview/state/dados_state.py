@@ -922,6 +922,7 @@ class DadosState(rx.State):
         empresa_id: int,
         periodo: str,
     ) -> str:
+        from contaview.logic import database
         from contaview.logic import auditoria as logic_auditoria
         from contaview.logic import conciliacao as logic_conciliacao
 
@@ -929,6 +930,11 @@ class DadosState(rx.State):
             return ""
 
         try:
+            # Recarrega os registros depois do insert para que a auditoria
+            # receba os IDs reais dos lançamentos.
+            df_salvo = database.carregar_lancamentos(empresa_id, periodo)
+            if df_salvo.empty:
+                return ""
             conc_res = logic_conciliacao.conciliar_partidas(df_salvo)
             logic_conciliacao.salvar_resultado_conciliacao(
                 empresa_id, periodo, conc_res
