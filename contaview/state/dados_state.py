@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class DadosState(rx.State):
+    sessao_autorizada: bool = False
     empresa_selecionada: str = ""
     periodo_selecionado: str = ""
     empresas_disponiveis: list[str] = []
@@ -111,6 +112,23 @@ class DadosState(rx.State):
     renomear_empresa_nome: str = ""
     dialog_renomear_aberto: bool = False
 
+    def _sessao_valida(self) -> bool:
+        from contaview.utils.auth import estado_autenticado
+
+        return estado_autenticado(self)
+
+    def _limpar_dados_protegidos(self) -> None:
+        self.empresas_disponiveis = []
+        self.empresas_cnpj_map = {}
+        self.periodos_disponiveis = []
+        self.lancamentos = []
+        self.lotes_preparados = []
+        self.linhas_preparadas = []
+        self.ocorrencias = []
+        self.conciliacao_pares = []
+        self.conciliacao_sem_par = []
+        self.dados_conciliacao = {}
+
     def set_tema(self, valor: bool):
         self.tema_escuro = valor
 
@@ -183,6 +201,10 @@ class DadosState(rx.State):
     async def handle_upload_previa(self, files: list[rx.UploadFile]):
         import io
         from contaview.logic import importacao as logic_importacao
+
+        if not self._sessao_valida():
+            yield rx.redirect("/")
+            return
 
         self.import_status = ""
         self.import_mensagem = ""
@@ -300,6 +322,10 @@ class DadosState(rx.State):
         import re
         from contaview.logic import importacao as logic_importacao
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         if not self.preparacao_caminho_temp:
             self.import_status = "erro"
             self.import_mensagem = "Envie uma planilha antes de confirmar."
@@ -380,6 +406,10 @@ class DadosState(rx.State):
     def carregar_lotes_preparados(self):
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         self.lotes_preparados = []
         self.lotes_conciliacao_opcoes = []
         self.linhas_preparadas = []
@@ -427,6 +457,10 @@ class DadosState(rx.State):
 
     def carregar_linhas_preparadas(self):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
         if empresa_id is None or not self.lote_selecionado_id:
@@ -511,6 +545,10 @@ class DadosState(rx.State):
         from contaview.logic import database
         from contaview.logic.importacao import validar_edicao_linha
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
         if empresa_id is None or not self.linha_edicao_id:
             self.erro_preparacao = "Selecione uma empresa e uma linha para corrigir."
@@ -540,6 +578,10 @@ class DadosState(rx.State):
     def exportar_lote_preparado(self, formato: str):
         from contaview.logic import database
         from contaview.logic.relatorios import exportar_lote_preparado
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
         if empresa_id is None or not self.lote_selecionado_id:
@@ -573,6 +615,10 @@ class DadosState(rx.State):
     def _carregar_fontes_conciliacao(self) -> tuple[list[dict], list[dict]]:
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return [], []
+
         empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
         if empresa_id is None:
             raise ValueError("Selecione uma empresa para conciliar.")
@@ -593,6 +639,10 @@ class DadosState(rx.State):
 
     def executar_conciliacao_fontes(self):
         from contaview.logic.conciliacao import conciliar_fontes
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         self.conciliacao_cruzada_mensagem = ""
         self.conciliacao_cruzada_pares = []
@@ -650,6 +700,10 @@ class DadosState(rx.State):
         from contaview.logic.conciliacao import conciliar_fontes
         from contaview.logic.relatorios import exportar_cruzamento_fontes
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         try:
             extrato, referencia = self._carregar_fontes_conciliacao()
             resultado = conciliar_fontes(extrato, referencia)
@@ -669,6 +723,9 @@ class DadosState(rx.State):
     def _resolver_empresa_id(self, nome: str) -> int | None:
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            return None
+
         try:
             df = database.listar_empresas()
             row = df[df["nome"] == nome]
@@ -681,6 +738,10 @@ class DadosState(rx.State):
     def carregar_empresas(self):
         from contaview.state.tema_state import TemaState
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         self.tema_escuro = TemaState.tema_escuro
         try:
@@ -699,6 +760,10 @@ class DadosState(rx.State):
 
     def carregar_periodos(self):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         if not self.empresa_selecionada:
             self.periodos_disponiveis = []
@@ -737,6 +802,10 @@ class DadosState(rx.State):
 
     def carregar_lancamentos(self):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         if not self.empresa_selecionada:
             self.lancamentos = []
@@ -851,6 +920,10 @@ class DadosState(rx.State):
         import io
         from contaview.logic import importacao as logic_importacao
 
+        if not self._sessao_valida():
+            yield rx.redirect("/")
+            return
+
         self.carregando_importacao = True
         self.import_status = ""
         self.import_mensagem = ""
@@ -960,6 +1033,10 @@ class DadosState(rx.State):
         import pandas as pd
         from contaview.logic import importacao as logic_importacao
         from contaview.logic.parsers import resolver_datas_para_periodo
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         periodo = self.periodo_manual_input.strip()
 
@@ -1091,6 +1168,10 @@ class DadosState(rx.State):
     def confirmar_substituicao(self):
         from contaview.logic import importacao as logic_importacao
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         caminho_temp = self.confirmacao_pendente_caminho_temp
         try:
             resultado = logic_importacao.executar_importacao_confirmada(
@@ -1158,6 +1239,10 @@ class DadosState(rx.State):
 
     def marcar_ocorrencia_resolvida(self, ocorrencia_id: int, resolvida: bool):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         try:
             database.atualizar_ocorrencia_resolvida(ocorrencia_id, resolvida)
@@ -1526,6 +1611,10 @@ class DadosState(rx.State):
 
     def confirmar_renomear_empresa(self):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         novo_nome = self.renomear_empresa_nome.strip()
         if not novo_nome:

@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatState(rx.State):
+    sessao_autorizada: bool = False
     conversas: list[dict] = []
     conversa_ativa: int | None = None
     mensagens: list[dict] = []
@@ -14,6 +15,11 @@ class ChatState(rx.State):
 
     renomeando_id: int | None = None
     renomear_titulo_temp: str = ""
+
+    def _sessao_valida(self) -> bool:
+        from contaview.utils.auth import estado_autenticado
+
+        return estado_autenticado(self)
 
     @rx.var
     def conversas_favoritas(self) -> list[dict]:
@@ -29,6 +35,12 @@ class ChatState(rx.State):
     def carregar_conversas(self):
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            self.conversas = []
+            self.mensagens = []
+            self.conversa_ativa = None
+            return rx.redirect("/")
+
         try:
             self.conversas = database.listar_conversas()
         except Exception as exc:
@@ -36,12 +48,17 @@ class ChatState(rx.State):
             self.conversas = []
 
     def iniciar_assistente(self):
+        if not self._sessao_valida():
+            return rx.redirect("/")
         self.carregar_conversas()
         if self.conversa_ativa is None:
             return ChatState.nova_conversa
 
     def selecionar_conversa(self, conversa_id: int):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            return rx.redirect("/")
 
         try:
             self.conversa_ativa = conversa_id
@@ -54,6 +71,9 @@ class ChatState(rx.State):
     def nova_conversa(self):
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            return rx.redirect("/")
+
         try:
             novo_id = database.criar_conversa()
             self.conversa_ativa = novo_id
@@ -65,6 +85,9 @@ class ChatState(rx.State):
 
     def excluir_conversa(self, conversa_id: int):
         from contaview.logic import database
+
+        if not self._sessao_valida():
+            return rx.redirect("/")
 
         try:
             if database.conversa_existe(conversa_id):
@@ -96,6 +119,9 @@ class ChatState(rx.State):
     def confirmar_renomear_conversa(self):
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            return rx.redirect("/")
+
         novo_titulo = self.renomear_titulo_temp.strip()
         if not novo_titulo or self.renomeando_id is None:
             self.renomeando_id = None
@@ -125,6 +151,9 @@ class ChatState(rx.State):
     def alternar_favorito(self, conversa_id: int):
         from contaview.logic import database
 
+        if not self._sessao_valida():
+            return rx.redirect("/")
+
         favorito = False
         for c in self.conversas:
             if c["id"] == conversa_id:
@@ -139,6 +168,10 @@ class ChatState(rx.State):
 
     async def enviar_mensagem(self):
         from contaview.logic import database, assistente
+
+        if not self._sessao_valida():
+            yield rx.redirect("/")
+            return
 
         self.carregando_resposta = True
         self.erro_assistente = ""
