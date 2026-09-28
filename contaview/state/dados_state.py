@@ -55,8 +55,12 @@ class DadosState(rx.State):
     lote_selecionado_id: int = 0
     lote_selecionado_periodo: str = ""
     lote_selecionado_tipo: str = ""
+    lote_selecionado_status: str = ""
     lote_total_linhas: int = 0
     pagina_linhas_preparadas: int = 0
+    aprovacao_lote_dialog_aberto: bool = False
+    aprovacao_lote_id: int = 0
+    aprovacao_lote_mensagem: str = ""
     linha_edicao_aberta: bool = False
     linha_edicao_id: int = 0
     linha_edicao_data: str = ""
@@ -414,6 +418,7 @@ class DadosState(rx.State):
         self.lotes_conciliacao_opcoes = []
         self.linhas_preparadas = []
         self.lote_selecionado_id = 0
+        self.lote_selecionado_status = ""
         self.erro_preparacao = ""
         empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
         if empresa_id is None:
@@ -451,6 +456,7 @@ class DadosState(rx.State):
         self.lote_selecionado_id = lote_id
         self.lote_selecionado_periodo = lote["periodo"] or ""
         self.lote_selecionado_tipo = lote["tipo_documento"]
+        self.lote_selecionado_status = lote["status"]
         self.lote_total_linhas = lote["total_linhas"]
         self.pagina_linhas_preparadas = 0
         self.carregar_linhas_preparadas()
@@ -605,6 +611,79 @@ class DadosState(rx.State):
 
     def exportar_lote_xlsx(self):
         return self.exportar_lote_preparado("xlsx")
+
+    def _finalizar_aprovacao_lote(self, resultado: dict) -> None:
+        from contaview.logic import database
+
+        empresa_id = resultado["empresa_id"]
+        periodo = resultado["periodo"]
+        df_salvo = database.carregar_lancamentos(empresa_id, periodo)
+        mensagem_rotinas = self._executar_rotinas_pos_importacao(
+            df_salvo, empresa_id, periodo
+        )
+        self.aprovacao_lote_dialog_aberto = False
+        self.aprovacao_lote_id = 0
+        self.aprovacao_lote_mensagem = (
+            f"Lote aprovado. {resultado['registros_salvos']} lançamento(s) "
+            f"foram incluído(s) no período {periodo[5:]}/{periodo[:4]}."
+            f"{mensagem_rotinas}"
+        )
+        self.carregar_lancamentos()
+        self.carregar_lotes_preparados()
+
+    def aprovar_lote_preparado(self):
+        from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+        empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
+        if empresa_id is None or not self.lote_selecionado_id:
+            self.erro_preparacao = "Selecione uma empresa e um lote para aprovar."
+            return
+        try:
+            resultado = database.aprovar_lote_preparacao(
+                empresa_id, self.lote_selecionado_id
+            )
+            self._finalizar_aprovacao_lote(resultado)
+        except database.PeriodoExistenteError as exc:
+            self.aprovacao_lote_id = self.lote_selecionado_id
+            self.aprovacao_lote_mensagem = str(exc)
+            self.aprovacao_lote_dialog_aberto = True
+        except ValueError as exc:
+            self.erro_preparacao = str(exc)
+        except Exception as exc:
+            logger.error("Falha ao aprovar lote preparado: %s", type(exc).__name__)
+            self.erro_preparacao = "Não foi possível aprovar o lote."
+
+    def confirmar_aprovacao_lote(self):
+        from contaview.logic import database
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+        empresa_id = self._resolver_empresa_id(self.empresa_selecionada)
+        if empresa_id is None or self.aprovacao_lote_id <= 0:
+            self.aprovacao_lote_dialog_aberto = False
+            self.erro_preparacao = "Selecione uma empresa e um lote para substituir."
+            return
+        try:
+            resultado = database.aprovar_lote_preparacao(
+                empresa_id, self.aprovacao_lote_id, substituir=True
+            )
+            self._finalizar_aprovacao_lote(resultado)
+        except (ValueError, database.PeriodoExistenteError) as exc:
+            self.aprovacao_lote_dialog_aberto = False
+            self.erro_preparacao = str(exc)
+        except Exception as exc:
+            logger.error("Falha ao substituir período pelo lote: %s", type(exc).__name__)
+            self.aprovacao_lote_dialog_aberto = False
+            self.erro_preparacao = "Não foi possível substituir o período."
+
+    def cancelar_aprovacao_lote(self):
+        self.aprovacao_lote_dialog_aberto = False
+        self.aprovacao_lote_id = 0
+        self.aprovacao_lote_mensagem = ""
 
     def set_lote_conciliacao_extrato(self, valor: str):
         self.lote_conciliacao_extrato = valor

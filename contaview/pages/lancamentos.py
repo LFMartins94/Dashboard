@@ -67,6 +67,40 @@ def _dialog_edicao() -> rx.Component:
     )
 
 
+def _dialog_aprovacao_lote() -> rx.Component:
+    return rx.alert_dialog.root(
+        rx.alert_dialog.content(
+            rx.alert_dialog.title("Período já existente"),
+            rx.alert_dialog.description(
+                DadosState.aprovacao_lote_mensagem
+            ),
+            rx.alert_dialog.description(
+                "Substituir o período apagará os lançamentos, conciliações "
+                "e ocorrências atuais antes de gravar o lote aprovado."
+            ),
+            rx.hstack(
+                rx.alert_dialog.cancel(
+                    rx.button(
+                        "Cancelar",
+                        variant="soft",
+                        on_click=DadosState.cancelar_aprovacao_lote,
+                    ),
+                ),
+                rx.alert_dialog.action(
+                    rx.button(
+                        "Substituir período",
+                        color_scheme="red",
+                        on_click=DadosState.confirmar_aprovacao_lote,
+                    ),
+                ),
+                justify="end",
+                spacing="3",
+            ),
+        ),
+        open=DadosState.aprovacao_lote_dialog_aberto,
+    )
+
+
 def _tabela_preparados() -> rx.Component:
     return rx.cond(
         DadosState.lote_selecionado_id > 0,
@@ -81,6 +115,14 @@ def _tabela_preparados() -> rx.Component:
                 rx.button(
                     "Exportar Excel", variant="outline",
                     on_click=DadosState.exportar_lote_xlsx,
+                ),
+                rx.cond(
+                    DadosState.lote_selecionado_status == "em_revisao",
+                    rx.button(
+                        "Aprovar lote",
+                        on_click=DadosState.aprovar_lote_preparado,
+                    ),
+                    rx.text("Lote já aprovado", font_size="13px"),
                 ),
                 width="100%",
             ),
@@ -190,6 +232,7 @@ def lancamentos() -> rx.Component:
                 ),
                 _tabela_preparados(),
                 _dialog_edicao(),
+                _dialog_aprovacao_lote(),
                 rx.text("Lançamentos classificados", font_size="18px", font_weight="600"),
                 rx.cond(
                     DadosState.carregando,

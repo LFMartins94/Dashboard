@@ -745,6 +745,129 @@ def atualizar_linha_preparada(
 # Operações — Conciliação
 # ---------------------------------------------------------------------------
 
+class PeriodoExistenteError(ValueError):
+    """Indica que a aprovação encontrou lançamentos no mesmo período."""
+
+
+def aprovar_lote_preparacao(
+    empresa_id: int, lote_id: int, substituir: bool = False,
+) -> dict:
+    """Promove um lote revisado para lançamentos em uma única transação."""
+    import pandas as pd
+
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        bloqueio = " FOR UPDATE" if conn.dialect.name == "postgresql" else ""
+        lote = conn.execute(text(f"""
+            SELECT id, empresa_id, nome_arquivo, periodo, status
+            FROM lotes_importacao
+            WHERE id = :lote_id AND empresa_id = :empresa_id{bloqueio}
+        """), {"lote_id": lote_id, "empresa_id": empresa_id}).mappings().first()
+        if lote is None:
+            raise ValueError("Lote não encontrado para a empresa selecionada.")
+        if lote["status"] != "em_revisao":
+            raise ValueError("Este lote já foi aprovado ou cancelado.")
+
+        linhas = [dict(linha) for linha in conn.execute(text("""
+            SELECT id, numero_linha, data, descricao, valor, tipo,
+                   conta_contabil, filial, status
+            FROM linhas_preparadas
+            WHERE lote_id = :lote_id AND empresa_id = :empresa_id
+            ORDER BY numero_linha
+        """), {"lote_id": lote_id, "empresa_id": empresa_id}).mappings()]
+        if not linhas:
+            raise ValueError("O lote não contém linhas para aprovação.")
+        for linha in linhas:
+            linha["data"] = pd.to_datetime(linha["data"]).date()
+
+        pendentes = [linha["numero_linha"] for linha in linhas if linha["status"] != "validado"]
+        if pendentes:
+            exemplo = ", ".join(str(numero) for numero in pendentes[:10])
+            sufixo = "..." if len(pendentes) > 10 else ""
+            raise ValueError(
+                f"Resolva as pendências antes de aprovar o lote. Linhas: {exemplo}{sufixo}."
+            )
+
+        campos_obrigatorios = ("data", "valor", "tipo", "conta_contabil")
+        incompletas = [
+            linha["numero_linha"]
+            for linha in linhas
+            if any(linha[campo] in (None, "") for campo in campos_obrigatorios)
+        ]
+        if incompletas:
+            exemplo = ", ".join(str(numero) for numero in incompletas[:10])
+            sufixo = "..." if len(incompletas) > 10 else ""
+            raise ValueError(
+                f"Data, valor, tipo e conta contábil são obrigatórios. Linhas: {exemplo}{sufixo}."
+            )
+
+        periodos_linhas = {linha["data"].strftime("%Y-%m") for linha in linhas}
+        if len(periodos_linhas) != 1:
+            raise ValueError("O lote contém mais de um período. Separe os dados antes de aprovar.")
+        periodo = lote["periodo"] or next(iter(periodos_linhas))
+        if periodo not in periodos_linhas:
+            raise ValueError("O período informado no lote não corresponde às datas das linhas.")
+
+        existe = conn.execute(text("""
+            SELECT EXISTS(
+                SELECT 1 FROM lancamentos
+                WHERE empresa_id = :empresa_id AND periodo = :periodo
+            )
+        """), {"empresa_id": empresa_id, "periodo": periodo}).scalar()
+        if existe and not substituir:
+            raise PeriodoExistenteError(
+                f"Já existem lançamentos para o período {periodo[5:]}/{periodo[:4]}."
+            )
+        if existe:
+            parametros = {"empresa_id": empresa_id, "periodo": periodo}
+            conn.execute(text("""
+                DELETE FROM ocorrencias_auditoria
+                WHERE empresa_id = :empresa_id
+                  AND lancamento_id IN (
+                      SELECT id FROM lancamentos
+                      WHERE empresa_id = :empresa_id AND periodo = :periodo
+                  )
+            """), parametros)
+            conn.execute(text("""
+                DELETE FROM conciliacoes
+                WHERE empresa_id = :empresa_id AND periodo = :periodo
+            """), parametros)
+            conn.execute(text("""
+                DELETE FROM lancamentos
+                WHERE empresa_id = :empresa_id AND periodo = :periodo
+            """), parametros)
+
+        df = pd.DataFrame([
+            {
+                "empresa_id": empresa_id,
+                "data": linha["data"],
+                "conta_contabil": linha["conta_contabil"],
+                "valor": linha["valor"],
+                "tipo": linha["tipo"],
+                "historico": linha["descricao"] or "",
+                "filial": linha["filial"],
+                "periodo": periodo,
+                "sequencial_lote": indice,
+                "origem": "lote_preparado",
+                "arquivo_origem": lote["nome_arquivo"],
+            }
+            for indice, linha in enumerate(linhas, start=1)
+        ])
+        registros = _inserir_lancamentos(conn, df)
+        conn.execute(text("""
+            UPDATE lotes_importacao
+            SET status = 'concluido', periodo = :periodo
+            WHERE id = :lote_id AND empresa_id = :empresa_id
+        """), {"lote_id": lote_id, "empresa_id": empresa_id, "periodo": periodo})
+
+    return {
+        "empresa_id": empresa_id,
+        "lote_id": lote_id,
+        "periodo": periodo,
+        "registros_salvos": registros,
+    }
+
+
 def inserir_conciliacao(empresa_id: int, periodo: str, total_pares: int, pares_ok: int, pares_com_erro: int) -> int:
     sql = text("""
         INSERT INTO conciliacoes (empresa_id, periodo, total_pares, pares_ok, pares_com_erro, status)
