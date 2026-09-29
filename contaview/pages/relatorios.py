@@ -98,6 +98,42 @@ def relatorios() -> rx.Component:
                             ],
                         ),
                         _card_relatorio(
+                            "calculator",
+                            "Balancete",
+                            "Calcule débitos, créditos e saldo por conta contábil "
+                            "para o período selecionado.",
+                            [
+                                rx.button(
+                                    "Exportar Excel",
+                                    variant="outline",
+                                    on_click=DadosState.exportar_excel_balancete,
+                                ),
+                                rx.button(
+                                    "Exportar PDF",
+                                    variant="outline",
+                                    on_click=DadosState.exportar_pdf_balancete,
+                                ),
+                            ],
+                        ),
+                        _card_relatorio(
+                            "chart-no-axes-combined",
+                            "DRE",
+                            "Calcule receitas e despesas por conta. Contas fora "
+                            "dos prefixos 3 e 4 ficam marcadas para revisão.",
+                            [
+                                rx.button(
+                                    "Exportar Excel",
+                                    variant="outline",
+                                    on_click=DadosState.exportar_excel_dre,
+                                ),
+                                rx.button(
+                                    "Exportar PDF",
+                                    variant="outline",
+                                    on_click=DadosState.exportar_pdf_dre,
+                                ),
+                            ],
+                        ),
+                        _card_relatorio(
                             "arrow-left-right",
                             "Relatório de conciliação",
                             "Exporte o relatório de conciliação com pares "

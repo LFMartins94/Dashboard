@@ -22,6 +22,89 @@ _CABECALHOS_EXCEL = {
 }
 
 
+def _decimal(valor) -> Decimal:
+    return Decimal(str(valor if valor is not None else 0)).quantize(Decimal("0.01"))
+
+
+def calcular_balancete(df: pd.DataFrame) -> pd.DataFrame:
+    """Calcula débitos, créditos e saldo por conta contábil."""
+    colunas = ["Conta contábil", "Débitos", "Créditos", "Saldo"]
+    if df.empty:
+        return pd.DataFrame(columns=colunas)
+    obrigatorias = {"conta_contabil", "valor", "tipo"}
+    if not obrigatorias.issubset(df.columns):
+        raise ValueError("Não há colunas suficientes para calcular o balancete.")
+
+    linhas = []
+    for conta, grupo in df.groupby("conta_contabil", dropna=False):
+        conta_exibida = str(conta or "").strip() or "Sem conta"
+        debitos = sum(
+            (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "D", "valor"]),
+            Decimal("0.00"),
+        )
+        creditos = sum(
+            (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "C", "valor"]),
+            Decimal("0.00"),
+        )
+        linhas.append({
+            "Conta contábil": conta_exibida,
+            "Débitos": debitos,
+            "Créditos": creditos,
+            "Saldo": debitos - creditos,
+        })
+    return pd.DataFrame(linhas).sort_values("Conta contábil").reset_index(drop=True)
+
+
+def calcular_dre(df: pd.DataFrame) -> pd.DataFrame:
+    """Calcula uma DRE determinística por prefixo de conta.
+
+    Contas iniciadas por 3 são tratadas como receitas e contas iniciadas por
+    4 como despesas. As demais ficam visíveis como não classificadas para não
+    serem escondidas do usuário.
+    """
+    colunas = ["Natureza", "Conta contábil", "Movimento", "Resultado"]
+    if df.empty:
+        return pd.DataFrame(columns=colunas)
+    obrigatorias = {"conta_contabil", "valor", "tipo"}
+    if not obrigatorias.issubset(df.columns):
+        raise ValueError("Não há colunas suficientes para calcular a DRE.")
+
+    linhas = []
+    for conta, grupo in df.groupby("conta_contabil", dropna=False):
+        conta_exibida = str(conta or "").strip() or "Sem conta"
+        if conta_exibida.startswith("3"):
+            natureza = "Receita"
+            resultado = sum(
+                (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "C", "valor"]),
+                Decimal("0.00"),
+            ) - sum(
+                (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "D", "valor"]),
+                Decimal("0.00"),
+            )
+        elif conta_exibida.startswith("4"):
+            natureza = "Despesa"
+            resultado = sum(
+                (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "D", "valor"]),
+                Decimal("0.00"),
+            ) - sum(
+                (_decimal(valor) for valor in grupo.loc[grupo["tipo"] == "C", "valor"]),
+                Decimal("0.00"),
+            )
+        else:
+            natureza = "Não classificada"
+            resultado = Decimal("0.00")
+        movimento = sum((_decimal(valor) for valor in grupo["valor"]), Decimal("0.00"))
+        linhas.append({
+            "Natureza": natureza,
+            "Conta contábil": conta_exibida,
+            "Movimento": movimento,
+            "Resultado": resultado,
+        })
+    return pd.DataFrame(linhas).sort_values(
+        ["Natureza", "Conta contábil"]
+    ).reset_index(drop=True)
+
+
 def _texto_seguro_planilha(valor) -> str:
     texto = str(valor if valor is not None else "")
     return "'" + texto if texto.lstrip().startswith(("=", "+", "-", "@")) else texto
@@ -209,6 +292,8 @@ def exportar_pdf(dados: dict, tipo_relatorio: str, empresa: str, periodo: str) -
     elif tipo_relatorio == 'auditoria' and 'df_oc' in dados:
         df = dados['df_oc'].copy()
     elif tipo_relatorio == 'lancamentos' and 'df' in dados:
+        df = dados['df'].copy()
+    elif tipo_relatorio in {'balancete', 'dre'} and 'df' in dados:
         df = dados['df'].copy()
 
     if not df.empty:

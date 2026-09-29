@@ -132,6 +132,8 @@ class DadosState(rx.State):
         self.conciliacao_pares = []
         self.conciliacao_sem_par = []
         self.dados_conciliacao = {}
+        self.download_data = ""
+        self.download_filename = ""
 
     def set_tema(self, valor: bool):
         self.tema_escuro = valor
@@ -1338,10 +1340,87 @@ class DadosState(rx.State):
         except Exception as exc:
             logger.error("Erro ao marcar ocorrencia %d: %s", ocorrencia_id, exc)
 
+    def _exportar_relatorio_contabil(self, tipo: str):
+        import base64
+        import pandas as pd
+        from contaview.logic import relatorios
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+        if not self.lancamentos:
+            self.erro_preparacao = "Selecione uma empresa e um período com lançamentos."
+            return
+        try:
+            df = pd.DataFrame(self.lancamentos)
+            calculadora = (
+                relatorios.calcular_balancete
+                if tipo == "balancete"
+                else relatorios.calcular_dre
+            )
+            resultado = calculadora(df)
+            bytes_data = relatorios.exportar_excel(
+                resultado, f"Relatório de {tipo.title()}"
+            )
+            self.download_data = base64.b64encode(bytes_data).decode()
+            self.download_filename = self._nome_arquivo(tipo, "xlsx")
+            return rx.download(data=self.download_data, filename=self.download_filename)
+        except Exception as exc:
+            logger.error("Erro ao exportar %s: %s", tipo, type(exc).__name__)
+            self.erro_preparacao = f"Não foi possível gerar o {tipo}."
+
+    def _exportar_pdf_contabil(self, tipo: str):
+        import base64
+        import pandas as pd
+        from contaview.logic import relatorios
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+        if not self.lancamentos:
+            self.erro_preparacao = "Selecione uma empresa e um período com lançamentos."
+            return
+        try:
+            df = pd.DataFrame(self.lancamentos)
+            calculadora = (
+                relatorios.calcular_balancete
+                if tipo == "balancete"
+                else relatorios.calcular_dre
+            )
+            resultado = calculadora(df)
+            bytes_data = relatorios.exportar_pdf(
+                {"df": resultado},
+                tipo,
+                self.empresa_selecionada or "sem-empresa",
+                self._periodo_exibicao(),
+            )
+            self.download_data = base64.b64encode(bytes_data).decode()
+            self.download_filename = self._nome_arquivo(tipo, "pdf")
+            return rx.download(data=self.download_data, filename=self.download_filename)
+        except Exception as exc:
+            logger.error("Erro ao exportar PDF de %s: %s", tipo, type(exc).__name__)
+            self.erro_preparacao = f"Não foi possível gerar o PDF de {tipo}."
+
+    def exportar_excel_balancete(self):
+        return self._exportar_relatorio_contabil("balancete")
+
+    def exportar_pdf_balancete(self):
+        return self._exportar_pdf_contabil("balancete")
+
+    def exportar_excel_dre(self):
+        return self._exportar_relatorio_contabil("dre")
+
+    def exportar_pdf_dre(self):
+        return self._exportar_pdf_contabil("dre")
+
     def exportar_excel_lancamentos(self):
         import base64
         import pandas as pd
         from contaview.logic.relatorios import exportar_excel
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         try:
             df = pd.DataFrame(self.lancamentos)
@@ -1356,6 +1435,10 @@ class DadosState(rx.State):
         import base64
         import pandas as pd
         from contaview.logic.relatorios import exportar_pdf
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         try:
             df = pd.DataFrame(self.lancamentos)
@@ -1379,6 +1462,10 @@ class DadosState(rx.State):
         from contaview.logic.relatorios import exportar_excel
         from contaview.logic.conciliacao import gerar_relatorio_conciliacao
 
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
+
         try:
             resultado = {
                 "df_pares": pd.DataFrame(self.conciliacao_pares),
@@ -1397,6 +1484,10 @@ class DadosState(rx.State):
         import pandas as pd
         from contaview.logic.relatorios import exportar_pdf
         from contaview.logic.conciliacao import gerar_relatorio_conciliacao
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         try:
             resultado = {
@@ -1422,6 +1513,10 @@ class DadosState(rx.State):
         import base64
         import pandas as pd
         from contaview.logic.relatorios import exportar_excel
+
+        if not self._sessao_valida():
+            self._limpar_dados_protegidos()
+            return rx.redirect("/")
 
         try:
             df = pd.DataFrame(self.ocorrencias)
