@@ -32,14 +32,17 @@ class AuditoriaConciliacaoTest(unittest.TestCase):
         ]
         self.assertEqual({item["lancamento_id"] for item in duplicidades}, {11, 12})
 
-    def test_conciliacao_nao_parea_contas_diferentes(self):
+    def test_conciliacao_exige_historico_e_nao_parea_movimentos_distintos(self):
         base = {
             "data": date(2026, 5, 1), "valor": 100,
             "historico": "Movimento", "sequencial_lote": 1,
         }
         df = pd.DataFrame([
             {**base, "conta_contabil": "1.1.1", "tipo": "C"},
-            {**base, "conta_contabil": "2.2.2", "tipo": "D", "sequencial_lote": 2},
+            {
+                **base, "conta_contabil": "2.2.2", "tipo": "D",
+                "historico": "Outro movimento", "sequencial_lote": 2,
+            },
         ])
 
         resultado = conciliar_partidas(df)

@@ -15,26 +15,46 @@ logger = logging.getLogger(__name__)
 
 def conciliar_partidas(df: pd.DataFrame) -> dict:
     df_ordenado = df.sort_values(["data", "sequencial_lote"]).reset_index(drop=True)
+    historicos = (
+        df_ordenado["historico"]
+        if "historico" in df_ordenado.columns
+        else df_ordenado.get(
+            "descricao", pd.Series("", index=df_ordenado.index)
+        )
+    )
+    filiais = df_ordenado.get(
+        "filial", pd.Series("", index=df_ordenado.index)
+    )
+    df_ordenado["_chave_historico"] = (
+        historicos
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+    )
+    df_ordenado["_chave_filial"] = (
+        filiais
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+    )
 
     pares: list[tuple[int, int]] = []
     indices_sem_par = set(df_ordenado.index)
 
-    # O saldo numérico sozinho não identifica uma partida. A conta passa a
-    # fazer parte da chave para não parear lançamentos de contas diferentes.
-    for (_data, _valor, _conta), grupo in df_ordenado.groupby(
-        ["data", "valor", "conta_contabil"], dropna=False
+    # Data e valor sozinhos não identificam uma partida. Histórico, filial e
+    # cardinalidade única evitam pareamentos arbitrários entre lançamentos.
+    for (_data, _valor, _historico, _filial), grupo in df_ordenado.groupby(
+        ["data", "valor", "_chave_historico", "_chave_filial"], dropna=False
     ):
-        if pd.isna(_conta) or not str(_conta).strip():
-            continue
         cs = grupo[grupo["tipo"] == "C"].index.tolist()
         ds = grupo[grupo["tipo"] == "D"].index.tolist()
 
-        n = min(len(cs), len(ds))
-        for i in range(n):
-            pares.append((cs[i], ds[i]))
-
-        for idx in cs[:n] + ds[:n]:
-            indices_sem_par.discard(idx)
+        if len(cs) == len(ds) == 1:
+            pares.append((cs[0], ds[0]))
+            indices_sem_par.discard(cs[0])
+            indices_sem_par.discard(ds[0])
 
     registros_pares = []
     for c_idx, d_idx in pares:
@@ -44,6 +64,7 @@ def conciliar_partidas(df: pd.DataFrame) -> dict:
             "seq_d": int(df_ordenado.loc[d_idx, "sequencial_lote"]),
             "data": row_c["data"],
             "conta_contabil": row_c["conta_contabil"],
+            "conta_contabil_debito": df_ordenado.loc[d_idx, "conta_contabil"],
             "valor": row_c["valor"],
             "status": "conciliado",
         })
