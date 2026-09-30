@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+node_modules
+staticfiles
+temp
+.env
+.env.*
+!.env.example
+__pycache__
+*.pyc
+*.pyo
+*.sqlite3
+.web

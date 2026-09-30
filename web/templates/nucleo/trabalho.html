@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao">
+    <div>
+        <p class="sobretitulo">Área de trabalho</p>
+        <h1>Uma rotina contábil mais clara.</h1>
+        <p class="descricao-pagina">A base da nova aplicação está pronta para receber empresas, competências e tarefas nas próximas etapas.</p>
+    </div>
+    <a class="botao-primario" href="{% url 'nucleo:entradas' %}">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Nova entrada
+    </a>
+</section>
+
+<section class="grade-metricas" aria-label="Resumo da competência">
+    <article class="metrica">
+        <div class="metrica-cabecalho"><span>Arquivos recebidos</span><span class="metrica-icone">01</span></div>
+        <strong>0</strong><small>Nenhum arquivo processado</small>
+    </article>
+    <article class="metrica">
+        <div class="metrica-cabecalho"><span>Pendências</span><span class="metrica-icone">02</span></div>
+        <strong>0</strong><small>Nenhuma decisão aguardando</small>
+    </article>
+    <article class="metrica">
+        <div class="metrica-cabecalho"><span>Entregas prontas</span><span class="metrica-icone">03</span></div>
+        <strong>0</strong><small>Aguardando o primeiro ciclo</small>
+    </article>
+</section>
+
+<div class="grade-conteudo">
+    <section class="painel">
+        <header class="painel-cabecalho">
+            <div><p class="titulo-secao">Próximos passos</p><p class="subtitulo-secao">A sequência segura para iniciar o trabalho</p></div>
+        </header>
+        <ol class="lista-passos">
+            <li><span>1</span><div><strong>Configure o acesso</strong><small>A autenticação e o contexto de empresa entram na próxima etapa.</small></div></li>
+            <li><span>2</span><div><strong>Envie os arquivos</strong><small>Planilhas de formatos diferentes serão preservadas e preparadas.</small></div></li>
+            <li><span>3</span><div><strong>Revise somente exceções</strong><small>As decisões ambíguas permanecem sob controle da contadora.</small></div></li>
+        </ol>
+    </section>
+
+    <aside class="painel painel-destaque">
+        <p class="sobretitulo">Ciclo de trabalho</p>
+        <h2>Do arquivo à entrega, com rastreabilidade.</h2>
+        <p>Entradas alimentam a conferência. Somente lotes aprovados produzem lançamentos e relatórios.</p>
+        <div class="fluxo-compacto" aria-label="Fluxo da aplicação">
+            <span>Entrada</span><i></i><span>Conferência</span><i></i><span>Entrega</span>
+        </div>
+    </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ titulo_erro }}{% endblock %}
+{% block conteudo %}
+<section class="erro-sistema">
+    <p class="codigo-erro">{{ status_erro }}</p>
+    <p class="sobretitulo">ContaView</p>
+    <h1>{{ titulo_erro }}</h1>
+    <p>{{ mensagem_erro }}</p>
+    <p class="referencia-erro">Referência: <code>{{ requisicao_id }}</code></p>
+    <a class="botao-primario" href="{% url 'nucleo:trabalho' %}">Voltar ao início</a>
+</section>
+{% endblock %}

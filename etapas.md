@@ -91,7 +91,7 @@ Um relatório de inventário e uma suíte de arquivos de aceitação. Nenhuma ta
 
 ## Etapa 2 — Esqueleto Django e execução pelo navegador
 
-**Status:** aguardando autorização.
+**Status:** concluída em 30/09/2026.
 
 ### Objetivo
 

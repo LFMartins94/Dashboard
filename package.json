@@ -1,0 +1,16 @@
+{
+  "name": "contaview-interface",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./web/interface/entrada.css -o ./web/static/css/contaview.css --minify",
+    "build:htmx": "node ./scripts/copiar_htmx.mjs",
+    "build": "npm run build:css && npm run build:htmx",
+    "dev:css": "tailwindcss -i ./web/interface/entrada.css -o ./web/static/css/contaview.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.0",
+    "htmx.org": "2.0.11",
+    "tailwindcss": "4.3.0"
+  }
+}

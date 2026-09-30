@@ -87,9 +87,45 @@ O PostgreSQL continua sendo usado em produção porque oferece transações, con
 
 O servidor usa `DATABASE_URL`. A chave anon do Supabase não é necessária no navegador. Nenhum segredo fica no código-fonte.
 
-## Execução local durante a transição
+## Execução local
 
-O projeto Reflex legado ainda pode ser executado para manutenção:
+### Nova aplicação Django
+
+No PowerShell, a partir da raiz do repositório:
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm install
+npm run build
+Copy-Item .env.example .env
+# Preencha DATABASE_URL e DJANGO_SECRET_KEY no .env.
+.venv\Scripts\python.exe web\manage.py check
+.venv\Scripts\python.exe web\manage.py runserver
+```
+
+A interface fica disponível em `http://127.0.0.1:8000/`. O diagnóstico completo fica em `/saude/`; `/saude/aplicacao/` verifica somente o processo web. O primeiro retorna HTTP 503 com `banco: indisponivel` quando a aplicação está ativa, mas não consegue consultar o PostgreSQL.
+
+Para acompanhar alterações visuais durante o desenvolvimento, execute `npm run dev:css` em outro terminal. HTMX e o CSS compilado são servidos localmente, sem dependência de CDN no navegador.
+
+Os testes da aplicação Django usam SQLite em memória, isolado do banco de produção:
+
+```powershell
+$env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
+.venv\Scripts\python.exe web\manage.py test nucleo
+```
+
+### Contêiner
+
+```powershell
+docker build -t contaview .
+docker run --rm -p 8000:8000 --env-file .env contaview
+```
+
+O contêiner executa Gunicorn. As configurações de produção exigem `DATABASE_URL`, `DJANGO_SECRET_KEY` e `DJANGO_ALLOWED_HOSTS`.
+
+### Aplicação Reflex legada
+
+O projeto Reflex ainda pode ser executado para manutenção:
 
 ```powershell
 .venv\Scripts\python -m pip install -r requirements.txt
@@ -97,7 +133,7 @@ Copy-Item .env.example .env
 .venv\Scripts\reflex.exe compile --dry
 ```
 
-O novo backend Django será adicionado em uma etapa própria, com ambiente e comando de execução documentados em `etapas.md` antes de qualquer migração de dados.
+A nova implementação fica em `web/`. O legado permanece congelado durante a transição e nenhuma tabela foi migrada na Etapa 2.
 
 ## Documentos de continuidade
 
@@ -110,6 +146,7 @@ O novo backend Django será adicionado em uma etapa própria, com ambiente e com
 - [`docs/catalogo_logic_etapa1.md`](docs/catalogo_logic_etapa1.md): catálogo dos módulos Python reutilizáveis.
 - [`docs/aceitacao_etapa1.md`](docs/aceitacao_etapa1.md): arquivos e critérios do primeiro ciclo de aceite.
 - [`docs/verificacao_backup_etapa1.md`](docs/verificacao_backup_etapa1.md): evidência da restauração e comparação do backup.
+- [`docs/aceitacao_etapa2.md`](docs/aceitacao_etapa2.md): evidências do esqueleto Django, interface, diagnóstico e testes HTTP.
 
 ## Critério de conclusão do primeiro ciclo
 

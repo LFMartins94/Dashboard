@@ -4,9 +4,11 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 1 — inventário, backup e base de aceitação.
+**Etapa concluída:** Etapa 2 — esqueleto Django e execução pelo navegador.
 
-**Situação do código legado:** a aplicação Reflex continua publicada como referência temporária. O fluxo novo ainda não foi implementado.
+**Situação da aplicação nova:** o esqueleto Django abre no navegador, possui layout responsivo, dark mode, rotas diretas, páginas de erro, diagnóstico e arquivos estáticos locais. Os módulos operacionais ainda são páginas de espera até suas etapas específicas.
+
+**Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
 **Último deploy conhecido do legado:** aplicação Reflex em execução, mas com falhas de conexão de estado no navegador e acesso direto a rotas internas incompleto.
 
@@ -35,7 +37,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 2 — Esqueleto Django e execução pelo navegador.**
+**Etapa 3 — Autenticação e contexto de trabalho.**
 
 ### Evidências da Etapa 1 concluída
 
@@ -48,18 +50,32 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Três testes de aceitação executados com sucesso usando `unittest`.
 - Dark mode disponível no mockup em `mockups/interface_nova.html`.
 
+### Evidências da Etapa 2 concluída
+
+- Aplicação Django criada em `web/`, sem remover o Reflex legado.
+- Configurações separadas para desenvolvimento, produção, testes e coleta de estáticos.
+- Tailwind 4.3.0 compilado e HTMX 2.0.11 servido localmente.
+- Layout responsivo com sidebar, cabeçalho, conteúdo, mensagens, dark mode e páginas de erro.
+- `/saude/aplicacao/` e `/saude/` testados; o segundo diferencia banco disponível de indisponível.
+- Logs JSON correlacionados por `X-Request-ID`.
+- Dockerfile com Gunicorn e WhiteNoise criado; construção local pendente porque este computador não possui Docker.
+- 10 testes Django e 30 testes legados aprovados.
+- Teste HTTP aprovou página inicial, rota interna, erro 404, CSS, HTMX, JavaScript e conexão PostgreSQL.
+- Evidência detalhada em `docs/aceitacao_etapa2.md`.
+- Nenhuma migração, DDL ou escrita foi feita no banco de produção.
+
 ### Ações da próxima etapa
 
-1. Criar o projeto Django sem alterar o banco de produção.
-2. Separar configurações de desenvolvimento e produção.
-3. Configurar variáveis de ambiente, conexão PostgreSQL e health check.
-4. Criar templates base, arquivos estáticos, Tailwind e HTMX.
-5. Reproduzir o layout aprovado do mockup, incluindo dark mode.
-6. Criar Dockerfile e comando documentado de execução local.
+1. Criar usuário administrativo inicial por comando seguro.
+2. Implementar login, logout e expiração de sessão.
+3. Aplicar proteção CSRF e cookies seguros ao fluxo autenticado.
+4. Criar limitação de tentativas de login.
+5. Implementar seleção persistente de empresa e competência.
+6. Garantir que toda consulta receba o contexto selecionado no servidor.
 
 ### Condição para iniciar
 
-A Etapa 2 aguarda autorização do usuário, conforme a regra de aprovação entre etapas.
+A Etapa 3 aguarda autorização do usuário, conforme a regra de aprovação entre etapas.
 
 ## Regra para continuar em outro local
 
@@ -79,8 +95,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 |---:|---|---|
 | 0 | Concluída | Documentação e decisão arquitetural atualizadas |
 | 1 | Concluída | Inventário, dump restaurado, comparação aprovada e três fixtures anonimizadas |
-| 2 | Próxima | Aguarda autorização para iniciar |
-| 3 | Pendente | Depende da Etapa 2 |
+| 2 | Concluída | Django, interface, diagnósticos, logs, ativos e contêiner documentados |
+| 3 | Próxima | Aguarda autorização para iniciar |
 | 4 | Pendente | Depende da Etapa 3 |
 | 5 | Pendente | Depende da Etapa 4 |
 | 6 | Pendente | Depende da Etapa 5 |

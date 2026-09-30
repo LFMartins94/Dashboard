@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao">
+    <div>
+        <p class="sobretitulo">Módulo operacional</p>
+        <h1>{{ titulo }}</h1>
+        <p class="descricao-pagina">{{ descricao }}</p>
+    </div>
+</section>
+
+<section class="painel estado-vazio">
+    <span class="estado-vazio-icone" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+    </span>
+    <p class="sobretitulo">Estrutura pronta</p>
+    <h2>Este fluxo será conectado por uma etapa vertical.</h2>
+    <p>A rota, o layout responsivo, o tema e a navegação já funcionam. As regras de negócio serão adicionadas na etapa correspondente do plano.</p>
+    <a class="botao-secundario" href="{% url 'nucleo:trabalho' %}">Voltar ao trabalho</a>
+</section>
+{% endblock %}
