@@ -1,4 +1,22 @@
-# AGENTS.md — ContaView (Reflex)
+# AGENTS.md — ContaView
+
+## Direção arquitetural vigente
+
+O Reflex é o sistema legado durante a transição. A arquitetura alvo é Django 5.2 LTS com Django Templates, HTML, Tailwind CSS, HTMX e JavaScript modular, servido pelo navegador. O PostgreSQL do Supabase permanece como banco de produção.
+
+Não iniciar novas funcionalidades no Reflex, exceto correções críticas necessárias para preservar dados ou manter a aplicação de referência. A nova implementação deve ser feita por etapas verticais conforme `etapas.md`.
+
+O objetivo é uma ferramenta web para uma contadora. Não criar aplicativo instalável, cliente desktop ou dependência de estado WebSocket para o fluxo principal.
+
+Durante a transição:
+
+- `contaview/logic/` é reaproveitado como camada de serviços e não deve receber decisões de interface.
+- O banco existente não deve ser renomeado nem apagado.
+- HTML, Tailwind e HTMX devem servir a fluxos de trabalho, não apenas dashboards.
+- O importador deve aceitar formatos genéricos e salvar mapeamentos confirmados por origem.
+- Toda automação deve ser classificada como automática, sugestão para confirmação ou decisão manual.
+- IA nunca aprova lote, substitui competência, confirma conciliação ambígua ou grava lançamento sem revisão.
+- Cada etapa concluída deve atualizar `faltando.md` antes de solicitar autorização para iniciar a próxima.
 
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.
@@ -11,22 +29,59 @@ Antes de qualquer tarefa, carregar sempre:
 
 ```
 carregue as skills reflex-docs, setup-python-env e reflex-process-management
-depois leia AGENTS.md e docs/DESIGN_SYSTEM.md
+depois leia AGENTS.md, README.md, etapas.md, faltando.md e docs/DESIGN_SYSTEM.md
 ```
+
+Antes de alterar o código, confira `faltando.md`. Execute somente a próxima etapa indicada ali. Ao terminar, registre evidências, testes e pendências no mesmo arquivo.
 
 ---
 
 ## O que é este projeto
 
-ContaView é uma ferramenta contábil full-stack construída em Reflex (Python).
+ContaView é uma ferramenta contábil web acessada pelo navegador. O código atual ainda contém uma aplicação Reflex legada; a aplicação alvo será Django.
 É usada por uma única contadora que acessa via navegador.
 Não é um sistema multi-tenant. Não é uma API pública. Não é um SaaS.
 
-**Stack:**
-- Frontend + Backend: Reflex (Python → compila para React + FastAPI internamente)
-- Banco de dados: Supabase (PostgreSQL)
-- Hospedagem: Reflex Cloud (plano gratuito)
-- Assistente de IA: OpenAI GPT-4o-mini
+**Stack atual durante a transição:**
+- Frontend + Backend legado: Reflex.
+- Banco de dados: Supabase (PostgreSQL).
+- Hospedagem legada: Reflex Cloud.
+- Assistente de IA: OpenAI GPT-4o-mini.
+
+**Stack alvo:**
+- Backend e autenticação: Django 5.2 LTS.
+- Interface: Django Templates, HTML semântico, Tailwind CSS e HTMX.
+- JavaScript: módulos pequenos para interações locais.
+- Banco: PostgreSQL do Supabase, acessado somente pelo servidor.
+- Arquivos: armazenamento privado.
+- Hospedagem: contêiner Linux com processo persistente e deploy automatizado.
+
+## Regra de aprovação entre etapas
+
+O usuário autorizou a execução contínua da etapa em andamento. Essa autorização não inicia automaticamente a etapa seguinte.
+
+Ao concluir uma etapa:
+
+1. Rodar a checklist da etapa em `etapas.md`.
+2. Executar os testes pertinentes.
+3. Atualizar `faltando.md` com o status, evidências e próxima etapa.
+4. Apresentar um resumo objetivo e pedir autorização para começar a próxima etapa.
+
+Não pedir autorização para leituras, testes, correções internas ou outras ações necessárias dentro da etapa já autorizada.
+
+## Regras da arquitetura web alvo
+
+- Toda rota Django deve funcionar após atualização direta do navegador.
+- O fluxo principal não depende de WebSocket.
+- Toda operação de escrita usa formulário validado, proteção CSRF e transação.
+- A interface deve retornar uma mensagem de sucesso ou erro acionável para cada operação.
+- Os templates não executam regras contábeis; chamam views e serviços.
+- JavaScript não duplica validações críticas do servidor.
+- Tailwind é compilado em CSS estático; não adicionar dependência de runtime ao navegador.
+- HTMX atualiza fragmentos HTML e mantém uma alternativa de formulário HTTP normal.
+- A aplicação usa o banco PostgreSQL existente. SQLite pode ser usado somente em testes isolados.
+- O cliente nunca recebe `DATABASE_URL`, chave de banco ou chave da OpenAI.
+- O Assistente é somente leitura e recebe apenas dados filtrados e necessários.
 
 ---
 
@@ -345,3 +400,29 @@ Documentação: `reflex.dev/docs/hosting/deploy-quick-start/`
 4. Perguntar antes de criar um novo arquivo — pode já existir um módulo responsável
 5. Perguntar antes de alterar o schema do banco — mudanças de DDL afetam dados em produção
 6. Nunca remover tabela ou coluna do banco sem instrução explícita
+
+## Estrutura alvo da migração
+
+Quando a Etapa 2 começar, criar a aplicação web Django sem apagar o legado:
+
+```
+web/
+├── configuracao/       # settings, URLs, WSGI/ASGI e ambiente
+├── trabalho/           # fila de tarefas e contexto empresa/competência
+├── entradas/           # upload, leitura, mapeamento e lotes
+├── conferencia/        # linhas preparadas, lançamentos e exceções
+├── entregas/           # relatórios e perfis de exportação
+├── assistente/         # consultas controladas e conversas
+├── templates/          # HTML e fragmentos HTMX
+└── static/             # CSS compilado e JavaScript local
+```
+
+Os serviços podem chamar a lógica Python existente, mas a interface não acessa `database.py` diretamente. Toda consulta passa por um serviço que valida a sessão, empresa e competência.
+
+## Documentos de continuidade
+
+- `README.md`: visão do produto e arquitetura alvo.
+- `etapas.md`: plano completo e critérios de aceite.
+- `faltando.md`: ponto de retomada obrigatório.
+- `docs/DESIGN_SYSTEM.md`: tokens visuais reaproveitados.
+- `docs/PROMPTS_ETAPAS.md`: documento histórico do Reflex; não iniciar novas etapas por ele.

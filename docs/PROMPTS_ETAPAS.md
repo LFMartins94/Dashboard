@@ -1,5 +1,7 @@
 # ContaView — Prompts de Migração para Reflex
 
+> **Documento histórico.** Este arquivo descreve a construção original em Reflex e não é o plano vigente. Para a migração web, leia `README.md`, `etapas.md` e `faltando.md` na raiz do projeto.
+
 Guia de construção da nova interface em Reflex.
 Use este documento junto com o AGENTS.md e o DESIGN_SYSTEM.md.
 
@@ -610,3 +612,4 @@ Use a skill reflex-process-management para os comandos corretos.
   eles são reaproveitados sem alteração estrutural.
 - Ao final de cada etapa: rodar reflex run localmente e validar
   a checklist antes de avançar.
+> **Documento histórico.** Este arquivo descreve a construção original em Reflex e não é o plano vigente. Para a migração web, leia `README.md`, `etapas.md` e `faltando.md` na raiz do projeto.
