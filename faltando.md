@@ -26,6 +26,13 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Automação separada entre ações automáticas, sugestões e decisões manuais.
 - Critérios de aceite e regra de aprovação entre etapas.
 
+## Artefato visual adicional
+
+- Mockup navegável criado em `mockups/interface_nova.html`.
+- O mockup representa a interface alvo para navegador: Trabalho, Entradas, Conferência, Entregas e Assistente.
+- A página é somente visual e não está ligada ao banco, à autenticação ou aos fluxos Django/HTMX.
+- A paleta usa fundo mineral, grafite e cobre, com foco em tarefas pendentes e no fluxo da competência.
+
 ## Próxima etapa
 
 **Etapa 1 — Inventário, backup e base de aceitação.**

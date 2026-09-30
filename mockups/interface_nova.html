@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ContaView — Mockup da nova interface</title>
+  <style>
+    :root {
+      --ink: #1d211f;
+      --ink-soft: #66706c;
+      --muted: #8a938f;
+      --line: #e7e9e5;
+      --paper: #f5f6f2;
+      --card: #ffffff;
+      --sidebar: #202522;
+      --sidebar-soft: #aeb8b2;
+      --sidebar-line: #39423d;
+      --accent: #bb704f;
+      --accent-soft: #f2e4dc;
+      --success: #3f7d64;
+      --success-soft: #e2efe9;
+      --warning: #a77832;
+      --warning-soft: #f6edda;
+      --shadow: 0 16px 40px rgba(31, 38, 34, .06);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .app { min-height: 100vh; display: flex; }
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 4;
+      width: 248px; padding: 24px 16px 18px;
+      color: #f4f6f3; background: var(--sidebar);
+      display: flex; flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 34px; }
+    .brand-mark {
+      width: 31px; height: 31px; display: grid; place-items: center;
+      color: #fff; background: var(--accent); border-radius: 9px;
+      font-weight: 750; font-size: 15px; letter-spacing: -.05em;
+    }
+    .brand-name { font-size: 18px; font-weight: 700; letter-spacing: -.04em; }
+    .brand-caption { margin-top: 3px; color: var(--sidebar-soft); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
+
+    .nav-label { margin: 0 10px 9px; color: #738079; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .nav { display: grid; gap: 5px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 12px;
+      border: 0; border-radius: 9px; color: var(--sidebar-soft); background: transparent;
+      text-align: left; transition: .16s ease;
+    }
+    .nav-item:hover { color: #fff; background: #2b332e; }
+    .nav-item.active { color: #fff; background: #343c37; box-shadow: inset 3px 0 var(--accent); }
+    .nav-item svg { width: 17px; height: 17px; opacity: .9; }
+    .nav-item span { font-size: 13px; font-weight: 560; }
+    .nav-badge { margin-left: auto; min-width: 21px; padding: 2px 6px; border-radius: 20px; color: #fff; background: #85563f; font-size: 10px; text-align: center; }
+    .sidebar-spacer { flex: 1; }
+    .sidebar-note { margin: 0 4px 16px; padding: 14px; border: 1px solid var(--sidebar-line); border-radius: 12px; background: #272e29; }
+    .sidebar-note-title { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
+    .sidebar-note p { margin: 0; color: var(--sidebar-soft); font-size: 11px; line-height: 1.5; }
+    .user { display: flex; align-items: center; gap: 10px; padding: 13px 10px 0; border-top: 1px solid var(--sidebar-line); }
+    .avatar { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #718078; font-size: 11px; font-weight: 700; }
+    .user-copy { min-width: 0; flex: 1; }
+    .user-name { overflow: hidden; color: #f1f4f1; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .user-role { margin-top: 2px; color: var(--sidebar-soft); font-size: 10px; }
+    .icon-button { display: grid; place-items: center; width: 29px; height: 29px; border: 0; border-radius: 7px; color: var(--sidebar-soft); background: transparent; }
+    .icon-button:hover { color: #fff; background: #303934; }
+
+    .main { width: calc(100% - 248px); margin-left: 248px; padding: 28px 38px 42px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; max-width: 1400px; margin: 0 auto; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--ink-soft); font-weight: 600; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .period-select, .company-select {
+      padding: 10px 34px 10px 12px; border: 1px solid var(--line); border-radius: 9px;
+      color: var(--ink-soft); background: var(--card); font-size: 12px; outline: 0;
+    }
+    .period-select:focus, .company-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    .welcome { max-width: 1400px; margin: 38px auto 28px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+    .eyebrow { margin: 0 0 9px; color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; color: var(--ink); font-size: clamp(27px, 3vw, 39px); font-weight: 690; letter-spacing: -.055em; line-height: 1.05; }
+    .welcome-copy { margin: 11px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
+    .primary-button { display: inline-flex; align-items: center; gap: 8px; padding: 11px 15px; border: 0; border-radius: 9px; color: #fff; background: var(--accent); font-size: 12px; font-weight: 700; box-shadow: 0 7px 15px rgba(187, 112, 79, .2); transition: transform .16s ease, box-shadow .16s ease; }
+    .primary-button:hover { transform: translateY(-1px); box-shadow: 0 9px 20px rgba(187, 112, 79, .27); }
+    .primary-button svg { width: 15px; height: 15px; }
+
+    .content-grid { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(310px, .85fr); gap: 20px; }
+    .left-column, .right-column { display: grid; align-content: start; gap: 20px; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+    .metric { min-height: 127px; padding: 17px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow); }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-soft); font-size: 12px; }
+    .metric-icon { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; color: var(--accent); background: var(--accent-soft); }
+    .metric-icon svg { width: 14px; height: 14px; }
+    .metric-value { margin-top: 21px; color: var(--ink); font-size: 28px; font-weight: 680; letter-spacing: -.05em; }
+    .metric-help { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .metric-help strong { color: var(--success); font-weight: 650; }
+
+    .panel { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 19px 20px 16px; }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -.015em; }
+    .panel-subtitle { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+    .text-button { border: 0; color: var(--accent); background: transparent; font-size: 11px; font-weight: 700; }
+    .text-button:hover { text-decoration: underline; }
+
+    .work-list { border-top: 1px solid var(--line); }
+    .work-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 20px; border-bottom: 1px solid var(--line); transition: background .16s ease; }
+    .work-row:last-child { border-bottom: 0; }
+    .work-row:hover { background: #fbfbf9; }
+    .work-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--accent); background: var(--accent-soft); }
+    .work-mark.green { color: var(--success); background: var(--success-soft); }
+    .work-mark svg { width: 16px; height: 16px; }
+    .work-name { overflow: hidden; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .work-detail { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .work-action { display: inline-flex; align-items: center; gap: 5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-soft); background: #fff; font-size: 11px; font-weight: 650; }
+    .work-action:hover { border-color: var(--accent); color: var(--accent); }
+    .status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
+    .status.warning { color: var(--warning); background: var(--warning-soft); }
+    .status.success { color: var(--success); background: var(--success-soft); }
+    .status.neutral { color: var(--ink-soft); background: #eef0ed; }
+
+    .progress-wrap { padding: 4px 20px 20px; }
+    .progress-meta { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-size: 10px; }
+    .progress { height: 7px; border-radius: 99px; background: #edf0ed; overflow: hidden; }
+    .progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+    .progress > span.complete { background: var(--success); }
+
+    .timeline { padding: 4px 20px 20px; }
+    .timeline-item { position: relative; display: grid; grid-template-columns: 24px 1fr; gap: 11px; padding-bottom: 20px; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-item:not(:last-child)::after { position: absolute; top: 21px; left: 9px; width: 1px; height: calc(100% - 13px); background: var(--line); content: ""; }
+    .timeline-dot { position: relative; z-index: 1; width: 19px; height: 19px; display: grid; place-items: center; border: 4px solid var(--card); border-radius: 50%; background: var(--line); box-shadow: 0 0 0 1px var(--line); }
+    .timeline-dot.done { background: var(--success); box-shadow: 0 0 0 1px var(--success); }
+    .timeline-dot.current { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .timeline-title { font-size: 12px; font-weight: 650; }
+    .timeline-copy { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .timeline-date { margin-top: 5px; color: var(--ink-soft); font-size: 10px; font-weight: 650; }
+
+    .table-wrap { overflow-x: auto; border-top: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; min-width: 540px; }
+    th { padding: 11px 20px; color: var(--muted); background: #fafbf9; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
+    td { padding: 13px 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; }
+    td:first-child { color: var(--ink); font-weight: 650; }
+    .file-name { display: flex; align-items: center; gap: 8px; }
+    .file-icon { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--accent); background: var(--accent-soft); }
+    .file-icon svg { width: 12px; height: 12px; }
+
+    .assistant-card { position: relative; padding: 20px; color: #f4f6f3; background: var(--sidebar); }
+    .assistant-card::after { position: absolute; right: -25px; bottom: -42px; width: 130px; height: 130px; border: 1px solid #465148; border-radius: 50%; content: ""; opacity: .42; }
+    .assistant-kicker { display: flex; align-items: center; gap: 7px; color: #d1a087; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .assistant-card h2 { margin: 12px 0 8px; font-size: 19px; letter-spacing: -.04em; }
+    .assistant-card p { max-width: 280px; margin: 0 0 17px; color: #aeb8b2; font-size: 11px; line-height: 1.55; }
+    .assistant-link { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #fff; background: transparent; font-size: 11px; font-weight: 700; }
+    .assistant-link:hover { color: #d1a087; }
+
+    .floating-help { position: fixed; right: 27px; bottom: 24px; z-index: 5; width: 48px; height: 48px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; background: var(--accent); box-shadow: 0 10px 22px rgba(187, 112, 79, .3); }
+    .floating-help svg { width: 19px; height: 19px; }
+
+    @media (max-width: 1060px) {
+      .main { padding: 24px; }
+      .content-grid { grid-template-columns: 1fr; }
+      .right-column { grid-template-columns: 1fr 1fr; align-items: start; }
+    }
+    @media (max-width: 760px) {
+      .sidebar { position: static; width: 70px; padding: 18px 10px; }
+      .brand { justify-content: center; padding: 0 0 26px; }
+      .brand-copy, .nav-label, .nav-item span, .nav-badge, .sidebar-note, .user-copy, .user .icon-button { display: none; }
+      .nav-item { justify-content: center; padding: 12px 8px; }
+      .user { justify-content: center; padding: 14px 0 0; }
+      .main { width: calc(100% - 70px); margin-left: 0; padding: 18px 14px 30px; }
+      .topbar, .welcome { align-items: flex-start; flex-direction: column; }
+      .top-actions { width: 100%; }
+      .company-select, .period-select { flex: 1; }
+      .welcome { margin-top: 25px; }
+      .metrics { grid-template-columns: 1fr; }
+      .right-column { grid-template-columns: 1fr; }
+      .work-row { grid-template-columns: 34px minmax(0, 1fr); }
+      .work-action { grid-column: 2; justify-self: start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">CV</div>
+        <div class="brand-copy">
+          <div class="brand-name">ContaView</div>
+          <div class="brand-caption">Rotina contábil</div>
+        </div>
+      </div>
+
+      <p class="nav-label">Workspace</p>
+      <nav class="nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="Trabalho"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h10M7 12h6M7 16h4"/></svg><span>Trabalho</span><span class="nav-badge">4</span></button>
+        <button class="nav-item" data-view="Entradas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg><span>Entradas</span></button>
+        <button class="nav-item" data-view="Conferência"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="9" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/></svg><span>Conferência</span><span class="nav-badge">3</span></button>
+        <button class="nav-item" data-view="Entregas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Entregas</span></button>
+        <button class="nav-item" data-view="Assistente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17.5 4 20v-4.5A7.5 7.5 0 0 1 11.5 8h1A7.5 7.5 0 0 1 20 15.5v.5a7.5 7.5 0 0 1-7.5 7.5H11"/><path d="M8 13h.01M12 13h.01M16 13h.01" stroke-linecap="round"/></svg><span>Assistente</span></button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-note">
+        <div class="sidebar-note-title"><span style="color: #d1a087">●</span> Competência em andamento</div>
+        <p>Setembro está 68% conferido. Ainda há 3 decisões pendentes.</p>
+      </div>
+      <div class="user">
+        <div class="avatar">AM</div>
+        <div class="user-copy"><div class="user-name">Ana Martins</div><div class="user-role">Contadora</div></div>
+        <button class="icon-button" aria-label="Configurações"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V20h-2.4v-.09a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.46 15a1.7 1.7 0 0 0-1.55-1.03H6V11.6h.91A1.7 1.7 0 0 0 8.46 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.7-1.7.06.06A1.7 1.7 0 0 0 11.7 6.1V5h2.4v1.1a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 18.37 10a1.7 1.7 0 0 0 1.55 1.03H20v2.4h-.08A1.7 1.7 0 0 0 18.37 15Z"/></svg></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="breadcrumb"><strong>Trabalho</strong><span>/</span><span id="current-view">Visão geral</span></div>
+        <div class="top-actions">
+          <select class="company-select" aria-label="Empresa"><option>Ilhas do Lago</option><option>Empresa Horizonte</option><option>Grupo Aurora</option></select>
+          <select class="period-select" aria-label="Competência"><option>Setembro / 2026</option><option>Agosto / 2026</option><option>Julho / 2026</option></select>
+        </div>
+      </div>
+
+      <section class="welcome">
+        <div><p class="eyebrow">Quarta-feira, 30 de setembro</p><h1>Bom dia, Ana.</h1><p class="welcome-copy">Aqui está o que precisa da sua atenção para fechar a competência.</p></div>
+        <button class="primary-button" id="new-entry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Novo lançamento</button>
+      </section>
+
+      <div class="content-grid">
+        <div class="left-column">
+          <section class="metrics" aria-label="Resumo da competência">
+            <article class="metric"><div class="metric-top"><span>Aguardando ação</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="8"/></svg></span></div><div class="metric-value">04</div><div class="metric-help">3 conferências e 1 entrega</div></article>
+            <article class="metric"><div class="metric-top"><span>Em conferência</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6"/></svg></span></div><div class="metric-value">68%</div><div class="metric-help"><strong>+12%</strong> desde ontem</div></article>
+            <article class="metric"><div class="metric-top"><span>Prontas para entregar</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div><div class="metric-value">02</div><div class="metric-help">Competências revisadas</div></article>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2 class="panel-title">Próximas ações</h2><p class="panel-subtitle">O trabalho que destrava o fechamento do período</p></div><button class="text-button">Ver todas</button></div>
+            <div class="work-list">
+              <div class="work-row"><div class="work-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h5M8 16h4"/></svg></div><div><div class="work-name">Conferir extrato bancário</div><div class="work-detail">Ilhas do Lago · 42 linhas preparadas · atualizado há 8 min</div></div><span class="status warning">3 pendências</span><button class="work-action">Abrir <span>→</span></button></div>
+              <div class="work-row"><div class="work-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="3"/></svg></div><div><div class="work-name">Revisar conciliação</div><div class="work-detail">Empresa Horizonte · 2 correspondências ambíguas</div></div><span class="status warning">Revisão</span><button class="work-action">Abrir <span>→</span></button></div>
+              <div class="work-row"><div class="work-mark green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6"/></svg></div><div><div class="work-name">Preparar entrega mensal</div><div class="work-detail">Grupo Aurora · agosto / 2026 · tudo conferido</div></div><span class="status success">Pronta</span><button class="work-action">Abrir <span>→</span></button></div>
+            </div>
+            <div class="progress-wrap"><div class="progress-meta"><span>Progresso da competência</span><strong>68%</strong></div><div class="progress"><span style="width: 68%"></span></div></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><div><h2 class="panel-title">Arquivos recentes</h2><p class="panel-subtitle">Entradas recebidas nos últimos dias</p></div><button class="text-button">Ir para entradas</button></div>
+            <div class="table-wrap"><table><thead><tr><th>Arquivo</th><th>Origem</th><th>Recebido</th><th>Status</th></tr></thead><tbody>
+              <tr><td><div class="file-name"><span class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>CAP_ILHAS_DO_LAGO.xlsx</div></td><td>Planilha bancária</td><td>Hoje, 09:42</td><td><span class="status warning">Em conferência</span></td></tr>
+              <tr><td><div class="file-name"><span class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>folha_setembro.csv</div></td><td>Folha de pagamento</td><td>Ontem, 16:10</td><td><span class="status success">Aprovado</span></td></tr>
+              <tr><td><div class="file-name"><span class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span>notas_09_2026.xls</div></td><td>Notas fiscais</td><td>29 set, 11:28</td><td><span class="status neutral">Mapeamento salvo</span></td></tr>
+            </tbody></table></div>
+          </section>
+        </div>
+
+        <div class="right-column">
+          <section class="panel"><div class="panel-head"><div><h2 class="panel-title">Fluxo da competência</h2><p class="panel-subtitle">Ilhas do Lago · Setembro / 2026</p></div></div><div class="timeline">
+            <div class="timeline-item"><div class="timeline-dot done"></div><div><div class="timeline-title">Documentos recebidos</div><div class="timeline-copy">3 de 3 arquivos esperados chegaram.</div><div class="timeline-date">Concluído hoje às 09:42</div></div></div>
+            <div class="timeline-item"><div class="timeline-dot current"></div><div><div class="timeline-title">Conferência</div><div class="timeline-copy">42 linhas preparadas. 3 precisam de decisão.</div><div class="timeline-date" style="color: var(--accent)">Ação necessária</div></div></div>
+            <div class="timeline-item"><div class="timeline-dot"></div><div><div class="timeline-title">Conciliação</div><div class="timeline-copy">Começa automaticamente após a aprovação.</div></div></div>
+            <div class="timeline-item"><div class="timeline-dot"></div><div><div class="timeline-title">Entrega</div><div class="timeline-copy">Balancete, DRE e arquivo de saída.</div></div></div>
+          </div></section>
+
+          <section class="assistant-card"><div class="assistant-kicker"><span>✦</span> Assistente ContaView</div><h2>Precisa encontrar alguma coisa?</h2><p>Pergunte sobre pendências, divergências ou o andamento das empresas.</p><button class="assistant-link">Abrir assistente <span>→</span></button></section>
+        </div>
+      </div>
+    </main>
+
+    <button class="floating-help" aria-label="Abrir assistente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17.5 4 20v-4.5A7.5 7.5 0 0 1 11.5 8h1A7.5 7.5 0 0 1 20 15.5v.5a7.5 7.5 0 0 1-7.5 7.5H11"/><path d="M8 13h.01M12 13h.01M16 13h.01" stroke-linecap="round"/></svg></button>
+  </div>
+
+  <script>
+    document.querySelectorAll('.nav-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach((nav) => nav.classList.remove('active'));
+        item.classList.add('active');
+        document.querySelector('#current-view').textContent = item.dataset.view;
+      });
+    });
+    document.querySelector('#new-entry').addEventListener('click', () => {
+      window.alert('No produto, este botão abrirá o formulário de novo lançamento.');
+    });
+  </script>
+</body>
+</html>
