@@ -6,6 +6,8 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 **Etapa concluída:** Etapa 0 — decisão e documentação.
 
+**Etapa em andamento:** Etapa 1 — inventário, backup e base de aceitação.
+
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária. O fluxo novo ainda não foi implementado.
 
 **Último deploy conhecido do legado:** aplicação Reflex em execução, mas com falhas de conexão de estado no navegador e acesso direto a rotas internas incompleto.
@@ -36,6 +38,22 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 ## Próxima etapa
 
 **Etapa 1 — Inventário, backup e base de aceitação.**
+
+### Progresso registrado
+
+- Inventário somente leitura do PostgreSQL concluído em `docs/inventario_etapa1.md`.
+- Catálogo dos módulos reutilizáveis concluído em `docs/catalogo_logic_etapa1.md`.
+- Base de aceitação da planilha CAP documentada em `docs/aceitacao_etapa1.md`.
+- Snapshot lógico local criado em `temp/etapa1/backup_public_logico.json`, com SHA-256 `cf7ff5d31f29efa8c0386722ec5776f623c02b68767fdac6397b4df2542140b7` no manifesto. O arquivo não é versionado porque pode conter dados reais.
+- Dark mode adicionado ao mockup em `mockups/interface_nova.html`.
+
+### Bloqueios para concluir a etapa
+
+- O dump nativo não foi gerado porque o CLI do Supabase exige Docker ou Podman, ausentes neste computador.
+- Ainda falta restaurar o dump nativo em um PostgreSQL de teste.
+- Ainda falta confirmar um terceiro arquivo contábil real em formato CSV ou XLS para a suíte de aceitação.
+
+Enquanto esses três pontos não forem resolvidos, a Etapa 1 permanece em andamento e a Etapa 2 não deve começar.
 
 ### Ações obrigatórias
 
@@ -71,7 +89,7 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | Etapa | Estado | Evidência |
 |---:|---|---|
 | 0 | Concluída | Documentação e decisão arquitetural atualizadas |
-| 1 | Próxima | Ainda não iniciada |
+| 1 | Em andamento | Inventário, catálogo e snapshot lógico concluídos; restauração nativa e terceiro arquivo pendentes |
 | 2 | Pendente | Depende da Etapa 1 |
 | 3 | Pendente | Depende da Etapa 2 |
 | 4 | Pendente | Depende da Etapa 3 |

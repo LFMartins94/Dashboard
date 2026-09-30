@@ -62,7 +62,7 @@ Auditoria -> triggers PostgreSQL + histórico exibido junto ao registro
 
 ## Etapa 1 — Inventário, backup e base de aceitação
 
-**Status:** aguardando autorização.
+**Status:** em andamento.
 
 ### Objetivo
 

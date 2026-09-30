@@ -27,6 +27,22 @@
       --radius-sm: 8px;
     }
 
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #edf1ed;
+      --ink-soft: #b1beb7;
+      --muted: #82908a;
+      --line: #303b35;
+      --paper: #151a18;
+      --card: #202824;
+      --sidebar: #101513;
+      --sidebar-line: #2b3730;
+      --accent-soft: #3c2d26;
+      --success-soft: #203a2e;
+      --warning-soft: #3d3321;
+      --shadow: 0 18px 44px rgba(0, 0, 0, .2);
+    }
+
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -78,6 +94,9 @@
     .user-role { margin-top: 2px; color: var(--sidebar-soft); font-size: 10px; }
     .icon-button { display: grid; place-items: center; width: 29px; height: 29px; border: 0; border-radius: 7px; color: var(--sidebar-soft); background: transparent; }
     .icon-button:hover { color: #fff; background: #303934; }
+    .theme-toggle { display: flex; align-items: center; gap: 9px; width: 100%; margin: 0 0 13px; padding: 9px 10px; border: 1px solid var(--sidebar-line); border-radius: 9px; color: var(--sidebar-soft); background: transparent; font-size: 11px; font-weight: 650; text-align: left; transition: .16s ease; }
+    .theme-toggle:hover { color: #fff; background: #2b332e; }
+    .theme-toggle svg { width: 15px; height: 15px; flex: 0 0 auto; }
 
     .main { width: calc(100% - 248px); margin-left: 248px; padding: 28px 38px 42px; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; max-width: 1400px; margin: 0 auto; }
@@ -170,6 +189,12 @@
     .floating-help { position: fixed; right: 27px; bottom: 24px; z-index: 5; width: 48px; height: 48px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; background: var(--accent); box-shadow: 0 10px 22px rgba(187, 112, 79, .3); }
     .floating-help svg { width: 19px; height: 19px; }
 
+    [data-theme="dark"] .work-row:hover { background: #27312c; }
+    [data-theme="dark"] .work-action { color: var(--ink-soft); background: #202824; }
+    [data-theme="dark"] .status.neutral { background: #303b35; }
+    [data-theme="dark"] th { background: #1a211e; }
+    [data-theme="dark"] .progress { background: #303b35; }
+
     @media (max-width: 1060px) {
       .main { padding: 24px; }
       .content-grid { grid-template-columns: 1fr; }
@@ -178,8 +203,9 @@
     @media (max-width: 760px) {
       .sidebar { position: static; width: 70px; padding: 18px 10px; }
       .brand { justify-content: center; padding: 0 0 26px; }
-      .brand-copy, .nav-label, .nav-item span, .nav-badge, .sidebar-note, .user-copy, .user .icon-button { display: none; }
+      .brand-copy, .nav-label, .nav-item span, .nav-badge, .sidebar-note, .user-copy, .user .icon-button, .theme-label { display: none; }
       .nav-item { justify-content: center; padding: 12px 8px; }
+      .theme-toggle { justify-content: center; padding: 9px 8px; }
       .user { justify-content: center; padding: 14px 0 0; }
       .main { width: calc(100% - 70px); margin-left: 0; padding: 18px 14px 30px; }
       .topbar, .welcome { align-items: flex-start; flex-direction: column; }
@@ -218,6 +244,10 @@
         <div class="sidebar-note-title"><span style="color: #d1a087">●</span> Competência em andamento</div>
         <p>Setembro está 68% conferido. Ainda há 3 decisões pendentes.</p>
       </div>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Ativar modo escuro" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke-linecap="round"/></svg>
+        <span class="theme-label">Modo escuro</span>
+      </button>
       <div class="user">
         <div class="avatar">AM</div>
         <div class="user-copy"><div class="user-name">Ana Martins</div><div class="user-role">Contadora</div></div>
@@ -293,6 +323,23 @@
     });
     document.querySelector('#new-entry').addEventListener('click', () => {
       window.alert('No produto, este botão abrirá o formulário de novo lançamento.');
+    });
+    const themeToggle = document.querySelector('#theme-toggle');
+    const applyTheme = (theme, persist = true) => {
+      const escuro = theme === 'dark';
+      document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+      themeToggle.setAttribute('aria-pressed', String(escuro));
+      themeToggle.setAttribute('aria-label', escuro ? 'Ativar modo claro' : 'Ativar modo escuro');
+      themeToggle.querySelector('.theme-label').textContent = escuro ? 'Modo claro' : 'Modo escuro';
+      if (persist) {
+        try { localStorage.setItem('contaview-theme', escuro ? 'dark' : 'light'); } catch (error) { /* armazenamento opcional no mockup */ }
+      }
+    };
+    let temaInicial = 'light';
+    try { temaInicial = localStorage.getItem('contaview-theme') || 'light'; } catch (error) { /* armazenamento opcional no mockup */ }
+    applyTheme(temaInicial, false);
+    themeToggle.addEventListener('click', () => {
+      applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
     });
   </script>
 </body>

@@ -106,6 +106,9 @@ O novo backend Django será adicionado em uma etapa própria, com ambiente e com
 - [`AGENTS.md`](AGENTS.md): regras para agentes e limites da transição.
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md): tokens e regras visuais que serão reaproveitados na interface HTML.
 - [`docs/PROMPTS_ETAPAS.md`](docs/PROMPTS_ETAPAS.md): documento histórico do Reflex; não é o plano vigente.
+- [`docs/inventario_etapa1.md`](docs/inventario_etapa1.md): fotografia somente leitura do banco para a Etapa 1.
+- [`docs/catalogo_logic_etapa1.md`](docs/catalogo_logic_etapa1.md): catálogo dos módulos Python reutilizáveis.
+- [`docs/aceitacao_etapa1.md`](docs/aceitacao_etapa1.md): arquivos e critérios do primeiro ciclo de aceite.
 
 ## Critério de conclusão do primeiro ciclo
 
