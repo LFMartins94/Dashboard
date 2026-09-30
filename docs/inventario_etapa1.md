@@ -189,4 +189,4 @@ Nenhuma política cadastrada no schema `public`.
 - Snapshot lógico: `temp\etapa1\backup_public_logico.json`.
 - SHA-256: `cf7ff5d31f29efa8c0386722ec5776f623c02b68767fdac6397b4df2542140b7`; manifesto em `temp/etapa1/backup_manifesto.json`.
 - Verificação realizada: o arquivo foi lido novamente como JSON e os totais por tabela foram comparados com a fotografia gerada.
-- Limitação: `pg_dump` não pôde ser executado porque o CLI do Supabase exige Docker/Podman neste ambiente. Ainda falta restaurar o dump nativo em um PostgreSQL de teste.
+- O dump nativo foi gerado com `pg_dump` 17.11 e restaurado em PostgreSQL 17.11 local; a verificação completa está em `docs/verificacao_backup_etapa1.md`.

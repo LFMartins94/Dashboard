@@ -1,0 +1,22 @@
+{
+  "origem": "CAP real, anonimizada e não versionada",
+  "linhas_por_arquivo": 42,
+  "debitos": 21,
+  "creditos": 21,
+  "total_debitos": "11243.72",
+  "total_creditos": "11243.72",
+  "arquivos": {
+    "cap_anonimizada_delimitada.xlsx": {
+      "bytes": 5616,
+      "sha256": "441a1ac3c3295fedf40ee99421cebd4cf34756589f2e0388d63d3553d2553463"
+    },
+    "cap_anonimizada_colunas.csv": {
+      "bytes": 2534,
+      "sha256": "0c89c850337d1ca0e447412801a583d7cef984d215d221a9d1f4c45237f9d767"
+    },
+    "cap_anonimizada_multiplas_abas.xlsx": {
+      "bytes": 6916,
+      "sha256": "8edebe57f01091db324c5be5a766d1f6d4e3502fdd2c770a8778311374285f67"
+    }
+  }
+}

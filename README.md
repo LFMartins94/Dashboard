@@ -109,6 +109,7 @@ O novo backend Django será adicionado em uma etapa própria, com ambiente e com
 - [`docs/inventario_etapa1.md`](docs/inventario_etapa1.md): fotografia somente leitura do banco para a Etapa 1.
 - [`docs/catalogo_logic_etapa1.md`](docs/catalogo_logic_etapa1.md): catálogo dos módulos Python reutilizáveis.
 - [`docs/aceitacao_etapa1.md`](docs/aceitacao_etapa1.md): arquivos e critérios do primeiro ciclo de aceite.
+- [`docs/verificacao_backup_etapa1.md`](docs/verificacao_backup_etapa1.md): evidência da restauração e comparação do backup.
 
 ## Critério de conclusão do primeiro ciclo
 

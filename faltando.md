@@ -4,9 +4,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 0 — decisão e documentação.
-
-**Etapa em andamento:** Etapa 1 — inventário, backup e base de aceitação.
+**Etapa concluída:** Etapa 1 — inventário, backup e base de aceitação.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária. O fluxo novo ainda não foi implementado.
 
@@ -14,7 +12,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 **Banco:** PostgreSQL do Supabase continua sendo a base de produção. Não trocar por SQLite.
 
-**Dados:** não executar migração, limpeza ou substituição de dados reais antes do backup e do inventário da Etapa 1.
+**Dados:** o backup nativo foi restaurado e verificado em PostgreSQL local. Nenhuma alteração foi feita nos dados de produção.
 
 ## O que já está documentado
 
@@ -37,40 +35,31 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 1 — Inventário, backup e base de aceitação.**
+**Etapa 2 — Esqueleto Django e execução pelo navegador.**
 
-### Progresso registrado
+### Evidências da Etapa 1 concluída
 
-- Inventário somente leitura do PostgreSQL concluído em `docs/inventario_etapa1.md`.
-- Catálogo dos módulos reutilizáveis concluído em `docs/catalogo_logic_etapa1.md`.
-- Base de aceitação da planilha CAP documentada em `docs/aceitacao_etapa1.md`.
-- Snapshot lógico local criado em `temp/etapa1/backup_public_logico.json`, com SHA-256 `cf7ff5d31f29efa8c0386722ec5776f623c02b68767fdac6397b4df2542140b7` no manifesto. O arquivo não é versionado porque pode conter dados reais.
-- Dark mode adicionado ao mockup em `mockups/interface_nova.html`.
+- Inventário somente leitura do PostgreSQL em `docs/inventario_etapa1.md`.
+- Catálogo dos módulos reutilizáveis em `docs/catalogo_logic_etapa1.md`.
+- Base de aceitação e resultados CAP em `docs/aceitacao_etapa1.md`.
+- Dump nativo local `temp/etapa1/backup_public.dump`, SHA-256 `1690190f89517154ea032757cde2f170344d465218d09871ca7770299fd96b0c`.
+- Restauração e comparação aprovadas em `docs/verificacao_backup_etapa1.md`.
+- Três fixtures anonimizadas e versionadas em `tests/fixtures/aceitacao/`.
+- Três testes de aceitação executados com sucesso usando `unittest`.
+- Dark mode disponível no mockup em `mockups/interface_nova.html`.
 
-### Bloqueios para concluir a etapa
+### Ações da próxima etapa
 
-- O dump nativo não foi gerado porque o CLI do Supabase exige Docker ou Podman, ausentes neste computador.
-- Ainda falta restaurar o dump nativo em um PostgreSQL de teste.
-- Ainda falta confirmar um terceiro arquivo contábil real em formato CSV ou XLS para a suíte de aceitação.
+1. Criar o projeto Django sem alterar o banco de produção.
+2. Separar configurações de desenvolvimento e produção.
+3. Configurar variáveis de ambiente, conexão PostgreSQL e health check.
+4. Criar templates base, arquivos estáticos, Tailwind e HTMX.
+5. Reproduzir o layout aprovado do mockup, incluindo dark mode.
+6. Criar Dockerfile e comando documentado de execução local.
 
-Enquanto esses três pontos não forem resolvidos, a Etapa 1 permanece em andamento e a Etapa 2 não deve começar.
+### Condição para iniciar
 
-### Ações obrigatórias
-
-1. Catalogar tabelas, colunas, índices, triggers e privilégios do Supabase.
-2. Criar e verificar um backup antes de qualquer DDL ou limpeza.
-3. Catalogar os módulos reutilizáveis de `contaview/logic/`.
-4. Separar pelo menos três arquivos reais anonimizados para aceitação.
-5. Registrar os resultados esperados da planilha CAP.
-6. Definir o teste completo do primeiro ciclo.
-
-### Condição para encerrar a etapa
-
-- Backup restaurado em ambiente de teste.
-- Inventário registrado.
-- Arquivos de aceitação disponíveis.
-- Teste CAP documentado.
-- `faltando.md` atualizado com evidências.
+A Etapa 2 aguarda autorização do usuário, conforme a regra de aprovação entre etapas.
 
 ## Regra para continuar em outro local
 
@@ -89,8 +78,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | Etapa | Estado | Evidência |
 |---:|---|---|
 | 0 | Concluída | Documentação e decisão arquitetural atualizadas |
-| 1 | Em andamento | Inventário, catálogo e snapshot lógico concluídos; restauração nativa e terceiro arquivo pendentes |
-| 2 | Pendente | Depende da Etapa 1 |
+| 1 | Concluída | Inventário, dump restaurado, comparação aprovada e três fixtures anonimizadas |
+| 2 | Próxima | Aguarda autorização para iniciar |
 | 3 | Pendente | Depende da Etapa 2 |
 | 4 | Pendente | Depende da Etapa 3 |
 | 5 | Pendente | Depende da Etapa 4 |

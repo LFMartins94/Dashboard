@@ -62,7 +62,7 @@ Auditoria -> triggers PostgreSQL + histórico exibido junto ao registro
 
 ## Etapa 1 — Inventário, backup e base de aceitação
 
-**Status:** em andamento.
+**Status:** concluída.
 
 ### Objetivo
 
@@ -91,7 +91,7 @@ Um relatório de inventário e uma suíte de arquivos de aceitação. Nenhuma ta
 
 ## Etapa 2 — Esqueleto Django e execução pelo navegador
 
-**Status:** aguardando.
+**Status:** aguardando autorização.
 
 ### Objetivo
 
