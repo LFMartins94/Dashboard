@@ -194,3 +194,26 @@ class FormularioEstadoItem(forms.Form):
 
 class FormularioAlternarCompetencia(forms.Form):
     competencia_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+
+
+class FormularioEditarLinhaConferencia(forms.Form):
+    linha_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+    data = forms.CharField(label="Data", required=False)
+    descricao = forms.CharField(label="Descrição", required=False)
+    valor = forms.CharField(label="Valor", required=False)
+    tipo = forms.CharField(label="Tipo", required=False, max_length=1)
+    conta_contabil = forms.CharField(label="Conta contábil", required=False)
+    filial = forms.CharField(label="Filial", required=False)
+
+
+class FormularioEdicaoEmLote(forms.Form):
+    linhas = forms.CharField(widget=forms.HiddenInput())
+    campo = forms.ChoiceField(choices=(
+        ("data", "Data"), ("descricao", "Descrição"), ("valor", "Valor"),
+        ("tipo", "Tipo"), ("conta_contabil", "Conta contábil"), ("filial", "Filial"),
+    ))
+    valor = forms.CharField(label="Novo valor")
+
+
+class FormularioLote(forms.Form):
+    lote_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())

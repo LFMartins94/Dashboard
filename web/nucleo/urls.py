@@ -42,8 +42,7 @@ urlpatterns = [
     ),
     path(
         "conferencia/",
-        views.modulo,
-        {"secao": "conferencia"},
+        views.conferencia,
         name="conferencia",
     ),
     path("entregas/", views.modulo, {"secao": "entregas"}, name="entregas"),

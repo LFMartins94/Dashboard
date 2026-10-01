@@ -192,7 +192,7 @@ Aceitar diferentes planilhas sem criar uma página específica para cada fornece
 
 ## Etapa 6 — Conferência e aprovação do lote
 
-**Status:** aguardando.
+**Status:** concluída.
 
 ### Objetivo
 
@@ -216,6 +216,8 @@ Fechar a ponte entre preparação e lançamentos finais.
 - Após atualizar a página, os lançamentos continuam disponíveis.
 - Uma falha durante a aprovação não deixa dados parcialmente gravados.
 - Substituição de competência exige confirmação explícita.
+
+Implementação concluída em `docs/aceitacao_etapa6.md`. A aprovação mantém a regra de um único período por lote; arquivos com vários meses precisam ser separados.
 
 ## Etapa 7 — Lançamentos manuais e histórico
 

@@ -467,3 +467,16 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.grade-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; }
+.cartao-kpi { background:var(--superficie); border:1px solid var(--borda); border-radius:14px; padding:16px; display:grid; gap:6px; }
+.cartao-kpi span { color:var(--texto-secundario); font-size:.78rem; }
+.cartao-kpi strong { font-size:1.25rem; }
+.cartao-kpi.alerta { border-color:var(--alerta); }
+.tabela input { width:100%; min-width:92px; }
+.linha-pendente { background:color-mix(in srgb, var(--alerta) 8%, transparent); }
+.texto-erro { display:block; color:var(--erro); max-width:180px; }
+.formulario-linha { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+.formulario-linha select, .formulario-linha input { min-height:40px; }
+.acoes-rodape { display:flex; gap:12px; margin-top:16px; }
+@media (max-width: 900px) { .grade-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }

@@ -78,7 +78,7 @@ A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e pre
 - salva o mapeamento confirmado para estruturas futuras;
 - grava o arquivo final em `lotes_importacao` e as linhas em `linhas_preparadas`.
 
-O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas pertencem à Etapa 6.
+O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas são feitas na tela de Conferência. A evidência está em `docs/aceitacao_etapa6.md`.
 
 ## Automação por nível de risco
 

@@ -745,6 +745,40 @@ def atualizar_linha_preparada(
 # Operações — Conciliação
 # ---------------------------------------------------------------------------
 
+def carregar_lote_preparacao(empresa_id: int, lote_id: int) -> dict | None:
+    """Carrega metadados do lote, sempre limitado à empresa selecionada."""
+    with _get_engine().connect() as conn:
+        linha = conn.execute(text("""
+            SELECT id, empresa_id, nome_arquivo, aba, tipo_documento,
+                   periodo, total_linhas, status, criado_em
+            FROM lotes_importacao
+            WHERE id = :lote_id AND empresa_id = :empresa_id
+        """), {"lote_id": lote_id, "empresa_id": empresa_id}).mappings().first()
+        return dict(linha) if linha else None
+
+
+def cancelar_lote_preparacao(empresa_id: int, lote_id: int) -> None:
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        resultado = conn.execute(text("""
+            UPDATE lotes_importacao SET status = 'cancelado'
+            WHERE id = :lote_id AND empresa_id = :empresa_id AND status = 'em_revisao'
+        """), {"lote_id": lote_id, "empresa_id": empresa_id})
+        if resultado.rowcount != 1:
+            raise ValueError("Somente um lote em revisÃ£o pode ser cancelado.")
+
+
+def reabrir_lote_preparacao(empresa_id: int, lote_id: int) -> None:
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        resultado = conn.execute(text("""
+            UPDATE lotes_importacao SET status = 'em_revisao'
+            WHERE id = :lote_id AND empresa_id = :empresa_id AND status = 'cancelado'
+        """), {"lote_id": lote_id, "empresa_id": empresa_id})
+        if resultado.rowcount != 1:
+            raise ValueError("Somente um lote cancelado pode ser reaberto.")
+
+
 class PeriodoExistenteError(ValueError):
     """Indica que a aprovação encontrou lançamentos no mesmo período."""
 

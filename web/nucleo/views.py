@@ -26,6 +26,9 @@ from .formularios import (
     FormularioLogin,
     FormularioMapeamentoEntrada,
     FormularioUploadEntrada,
+    FormularioEditarLinhaConferencia,
+    FormularioEdicaoEmLote,
+    FormularioLote,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -58,6 +61,7 @@ from .servicos.trabalho import (
     montar_painel_trabalho,
     obter_competencia_para_alternar,
 )
+from .servicos import conferencia as servico_conferencia
 
 logger = logging.getLogger(__name__)
 
@@ -544,20 +548,72 @@ def descartar_entrada(requisicao: HttpRequest, identificador) -> HttpResponse:
     return redirect("nucleo:entradas")
 
 
-@require_GET
-def modulo(requisicao: HttpRequest, secao: str) -> HttpResponse:
+@require_http_methods(["GET", "POST"])
+def conferencia(requisicao: HttpRequest) -> HttpResponse:
     contexto = exigir_contexto(requisicao)
-    dados = SECOES[secao]
+    lote_bruto = requisicao.POST.get("lote_id") or requisicao.GET.get("lote")
+    try:
+        lote_id = int(lote_bruto) if lote_bruto else None
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao")
+            formulario_lote = FormularioLote(requisicao.POST)
+            if not formulario_lote.is_valid():
+                raise servico_conferencia.ErroConferencia("Lote informado inválido.")
+            lote_id = formulario_lote.cleaned_data["lote_id"]
+            if acao == "editar_linha":
+                formulario = FormularioEditarLinhaConferencia(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_conferencia.ErroConferencia("Revise os campos da linha.")
+                dados_form = formulario.cleaned_data.copy()
+                linha_id = dados_form.pop("linha_id")
+                servico_conferencia.editar_linha(contexto, lote_id, linha_id, dados_form)
+                messages.success(requisicao, "Linha atualizada e validada.")
+            elif acao == "editar_lote":
+                formulario = FormularioEdicaoEmLote(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_conferencia.ErroConferencia("Revise a edição em lote.")
+                ids = [int(item) for item in formulario.cleaned_data["linhas"].split(",") if item.strip().isdigit()]
+                total = servico_conferencia.editar_em_lote(contexto, lote_id, ids, formulario.cleaned_data["campo"], formulario.cleaned_data["valor"])
+                messages.success(requisicao, f"{total} linha(s) atualizada(s).")
+            elif acao == "aprovar":
+                resultado = servico_conferencia.aprovar(contexto, lote_id, requisicao.POST.get("substituir") == "1")
+                messages.success(requisicao, f"Lote aprovado: {resultado['registros_salvos']} lançamento(s) gravado(s).")
+                return redirect("nucleo:entradas")
+            elif acao == "cancelar":
+                servico_conferencia.cancelar(contexto, lote_id)
+                messages.success(requisicao, "Preparação cancelada. O arquivo pode ser reaberto para nova conferência.")
+            elif acao == "reabrir":
+                servico_conferencia.reabrir(contexto, lote_id)
+                messages.success(requisicao, "Lote reaberto para conferência.")
+    except servico_conferencia.PeriodoPrecisaSubstituicao as erro:
+        dados = servico_conferencia.carregar_conferencia(contexto, lote_id)
+        dados.update({"confirmar_substituicao": True, "erro_substituicao": str(erro)})
+        return render(requisicao, "nucleo/conferencia.html", {"titulo_pagina": "Conferência", "secao_ativa": "conferencia", "contexto": contexto, **dados})
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de conferência recusada: %s", erro)
+        messages.error(requisicao, str(erro) or "Não foi possível concluir a operação.")
+    try:
+        dados = servico_conferencia.carregar_conferencia(contexto, lote_id)
+    except (ValueError, DatabaseError) as erro:
+        messages.error(requisicao, str(erro))
+        dados = {"lotes": [], "lote": None, "linhas": [], "validas": 0, "pendentes": 0, "total_debito": 0, "total_credito": 0, "saldo": 0}
     return render(
         requisicao,
-        "nucleo/modulo.html",
+        "nucleo/conferencia.html",
         {
-            "titulo_pagina": dados["titulo"],
-            "secao_ativa": secao,
+            "titulo_pagina": "Conferência",
+            "secao_ativa": "conferencia",
             "contexto": contexto,
             **dados,
         },
     )
+
+
+@require_GET
+def modulo(requisicao: HttpRequest, secao: str) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    dados = SECOES[secao]
+    return render(requisicao, "nucleo/modulo.html", {"titulo_pagina": dados["titulo"], "secao_ativa": secao, "contexto": contexto, **dados})
 
 
 @login_not_required

@@ -156,3 +156,7 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 11 | Pendente | Depende da Etapa 10 |
 | 12 | Pendente | Depende da Etapa 11 |
 | 13 | Pendente | Depende da Etapa 12 |
+
+## Atualização da Etapa 6
+
+Etapa 6 concluída. A tela de Conferência agora carrega o lote da empresa e competência selecionadas, permite editar linhas individualmente ou em lote, apresenta totais, bloqueia aprovação com pendências, solicita confirmação para substituir competência existente e permite cancelar ou reabrir preparação. Foram aprovados 48 testes Django, 30 testes legados, verificação de sintaxe e compilação Tailwind. A próxima etapa é a Etapa 7, Assistente controlado, aguardando autorização.
