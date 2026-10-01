@@ -5,6 +5,9 @@ from . import views
 app_name = "nucleo"
 
 urlpatterns = [
+    path("acesso/", views.acesso, name="login"),
+    path("sair/", views.sair, name="logout"),
+    path("contexto/", views.selecionar_contexto, name="selecionar_contexto"),
     path("", views.trabalho, name="trabalho"),
     path("entradas/", views.modulo, {"secao": "entradas"}, name="entradas"),
     path(

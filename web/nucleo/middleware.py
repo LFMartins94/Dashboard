@@ -7,7 +7,11 @@ import re
 from time import monotonic
 from uuid import uuid4
 
+from django.shortcuts import redirect
+from django.urls import reverse
+
 from .logs import identificador_requisicao
+from .servicos.contexto import carregar_contexto
 
 logger = logging.getLogger(__name__)
 PADRAO_IDENTIFICADOR = re.compile(r"^[A-Za-z0-9_.:-]{1,100}$")
@@ -41,3 +45,24 @@ class IdentificadorRequisicaoMiddleware:
             return resposta
         finally:
             identificador_requisicao.reset(token)
+
+
+class ContextoTrabalhoMiddleware:
+    """Exige empresa e competência em todas as rotas operacionais."""
+
+    def __init__(self, obter_resposta):
+        self.obter_resposta = obter_resposta
+
+    def __call__(self, requisicao):
+        requisicao.contexto_trabalho = carregar_contexto(requisicao)
+        return self.obter_resposta(requisicao)
+
+    def process_view(self, requisicao, view_func, view_args, view_kwargs):
+        if not requisicao.user.is_authenticated:
+            return None
+        if getattr(view_func, "contexto_obrigatorio", True) is False:
+            return None
+        if requisicao.contexto_trabalho is not None:
+            return None
+        destino = reverse("nucleo:selecionar_contexto")
+        return redirect(f"{destino}?proximo={requisicao.get_full_path()}")

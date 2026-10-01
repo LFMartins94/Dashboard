@@ -114,6 +114,26 @@ $env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
 .venv\Scripts\python.exe web\manage.py test nucleo
 ```
 
+### Autenticação da nova aplicação
+
+As rotas de trabalho exigem uma sessão Django válida e um contexto de empresa e competência selecionado no servidor. A rota `/acesso/` e os diagnósticos são as únicas páginas públicas. O logout aceita somente `POST` e encerra a sessão completa.
+
+Depois que as migrações forem executadas no ambiente de destino, crie o primeiro usuário pelo prompt seguro:
+
+```powershell
+.venv\Scripts\python.exe web\manage.py criar_usuario_inicial --usuario contadora --nome "Nome da contadora"
+```
+
+A senha é solicitada sem aparecer no comando nem no histórico do terminal. Em automação, use `DJANGO_ADMIN_PASSWORD` apenas como variável temporária e remova-a ao terminar.
+
+As migrações Django ainda não devem ser executadas no PostgreSQL de produção. Elas serão aplicadas na Etapa 13, depois de novo backup e da confirmação do ambiente de corte. Até lá, o fluxo completo de autenticação é verificado pela suíte isolada:
+
+```powershell
+$env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
+.venv\Scripts\python.exe web\manage.py test nucleo
+Remove-Item Env:DJANGO_SETTINGS_MODULE
+```
+
 ### Contêiner
 
 ```powershell
@@ -147,6 +167,7 @@ A nova implementação fica em `web/`. O legado permanece congelado durante a tr
 - [`docs/aceitacao_etapa1.md`](docs/aceitacao_etapa1.md): arquivos e critérios do primeiro ciclo de aceite.
 - [`docs/verificacao_backup_etapa1.md`](docs/verificacao_backup_etapa1.md): evidência da restauração e comparação do backup.
 - [`docs/aceitacao_etapa2.md`](docs/aceitacao_etapa2.md): evidências do esqueleto Django, interface, diagnóstico e testes HTTP.
+- [`docs/aceitacao_etapa3.md`](docs/aceitacao_etapa3.md): controles de autenticação, sessão, contexto e evidências de segurança.
 
 ## Critério de conclusão do primeiro ciclo
 

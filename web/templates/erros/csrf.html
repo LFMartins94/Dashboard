@@ -1,0 +1,15 @@
+{% extends "base_publica.html" %}
+
+{% block titulo %}Solicitação expirada{% endblock %}
+{% block conteudo %}
+<main class="erro-publico">
+    <div class="cartao-acesso">
+        <p class="codigo-erro">403</p>
+        <p class="sobretitulo">Proteção de sessão</p>
+        <h1>Esta solicitação expirou.</h1>
+        <p>Atualize a página e envie os dados novamente.</p>
+        <p class="referencia-erro">Referência: <code>{{ requisicao_id }}</code></p>
+        <a class="botao-primario" href="{% url 'nucleo:login' %}">Voltar ao acesso</a>
+    </div>
+</main>
+{% endblock %}

@@ -117,7 +117,7 @@ Criar a nova aplicação web sem alterar o banco de produção.
 
 ## Etapa 3 — Autenticação e contexto de trabalho
 
-**Status:** aguardando.
+**Status:** concluída em 01/10/2026.
 
 ### Objetivo
 

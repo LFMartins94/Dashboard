@@ -1,0 +1,23 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR" data-theme="claro">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>{% block titulo %}Acesso{% endblock %} · ContaView</title>
+    <script>
+        (() => {
+            const salvo = localStorage.getItem("contaview-tema");
+            const tema = salvo || (matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro");
+            document.documentElement.dataset.theme = tema;
+        })();
+    </script>
+    <link rel="stylesheet" href="{% static 'css/contaview.css' %}">
+    <script src="{% static 'js/contaview.js' %}" defer></script>
+</head>
+<body class="pagina-publica">
+    <button class="tema-publico" id="botao-tema" type="button" aria-pressed="false"><span>Modo escuro</span></button>
+    {% block conteudo %}{% endblock %}
+</body>
+</html>

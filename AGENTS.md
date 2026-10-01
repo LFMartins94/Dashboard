@@ -18,6 +18,15 @@ Durante a transição:
 - IA nunca aprova lote, substitui competência, confirma conciliação ambígua ou grava lançamento sem revisão.
 - Cada etapa concluída deve atualizar `faltando.md` antes de solicitar autorização para iniciar a próxima.
 
+Para a aplicação Django em `web/`:
+
+- Todas as rotas operacionais são autenticadas por padrão; exceções públicas precisam ser explícitas.
+- Toda view ou serviço contábil deve obter empresa e competência por `exigir_contexto(request)` antes de consultar ou alterar dados.
+- Empresa e competência recebidas do navegador nunca substituem o contexto validado da sessão.
+- Login, sessão e limitação de tentativas usam os recursos do Django e tabelas acessíveis somente pelo servidor.
+- Migrações não são executadas no PostgreSQL de produção antes do corte previsto na Etapa 13.
+- As regras baseadas em `rx.State` abaixo valem somente para manutenção do legado Reflex.
+
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.
 

@@ -4,9 +4,11 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 2 — esqueleto Django e execução pelo navegador.
+**Etapa concluída:** Etapa 3 — autenticação e contexto de trabalho.
 
-**Situação da aplicação nova:** o esqueleto Django abre no navegador, possui layout responsivo, dark mode, rotas diretas, páginas de erro, diagnóstico e arquivos estáticos locais. Os módulos operacionais ainda são páginas de espera até suas etapas específicas.
+**Etapa em andamento:** nenhuma. A Etapa 4 aguarda autorização do usuário.
+
+**Situação da aplicação nova:** o Django possui layout responsivo, dark mode, login protegido, sessão, logout, limitação de tentativas e seleção persistente de empresa e competência. Todas as rotas operacionais exigem autenticação e contexto. Os módulos de negócio ainda são páginas de espera até suas etapas específicas.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
@@ -37,7 +39,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 3 — Autenticação e contexto de trabalho.**
+**Etapa 4 — Tela Trabalho.**
 
 ### Evidências da Etapa 1 concluída
 
@@ -64,18 +66,31 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Evidência detalhada em `docs/aceitacao_etapa2.md`.
 - Nenhuma migração, DDL ou escrita foi feita no banco de produção.
 
+### Evidências da Etapa 3 concluída
+
+- Login e logout implementados com autenticação e sessão nativas do Django.
+- Rotas operacionais protegidas por padrão; login e diagnósticos são exceções explícitas.
+- Cookies, expiração de sessão, CSRF e destinos de redirecionamento protegidos.
+- Limite de tentativas persistente com chave HMAC, sem endereço ou usuário brutos no banco.
+- Comando `criar_usuario_inicial` recebe a senha por prompt seguro ou variável temporária.
+- Empresa ativa e competência são validadas no servidor e armazenadas na sessão.
+- Duas sessões simultâneas mantêm contextos independentes.
+- Migrações para autenticação, sessão, limitador e proteção RLS foram preparadas, mas não aplicadas em produção.
+- 24 testes Django aprovados no banco SQLite isolado.
+- Evidência detalhada em `docs/aceitacao_etapa3.md`.
+- Nenhuma migração, DDL, criação de usuário ou escrita foi feita no banco de produção.
+
 ### Ações da próxima etapa
 
-1. Criar usuário administrativo inicial por comando seguro.
-2. Implementar login, logout e expiração de sessão.
-3. Aplicar proteção CSRF e cookies seguros ao fluxo autenticado.
-4. Criar limitação de tentativas de login.
-5. Implementar seleção persistente de empresa e competência.
-6. Garantir que toda consulta receba o contexto selecionado no servidor.
+1. Exibir empresas e competências abertas.
+2. Mostrar documentos aguardados, lotes pendentes, divergências e entregas.
+3. Criar estados operacionais: aguardando, recebido, em conferência, com divergência, revisado e entregue.
+4. Permitir abrir diretamente a próxima ação.
+5. Criar checklist recorrente por empresa e competência.
 
 ### Condição para iniciar
 
-A Etapa 3 aguarda autorização do usuário, conforme a regra de aprovação entre etapas.
+A Etapa 4 ainda não foi autorizada. Não iniciá-la antes da autorização do usuário.
 
 ## Regra para continuar em outro local
 
@@ -96,8 +111,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 0 | Concluída | Documentação e decisão arquitetural atualizadas |
 | 1 | Concluída | Inventário, dump restaurado, comparação aprovada e três fixtures anonimizadas |
 | 2 | Concluída | Django, interface, diagnósticos, logs, ativos e contêiner documentados |
-| 3 | Próxima | Aguarda autorização para iniciar |
-| 4 | Pendente | Depende da Etapa 3 |
+| 3 | Concluída | Login, sessão, CSRF, limitação de tentativas e contexto validados em 24 testes isolados |
+| 4 | Aguardando autorização | Tela Trabalho e fila operacional |
 | 5 | Pendente | Depende da Etapa 4 |
 | 6 | Pendente | Depende da Etapa 5 |
 | 7 | Pendente | Depende da Etapa 6 |

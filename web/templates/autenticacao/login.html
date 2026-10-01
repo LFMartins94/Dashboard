@@ -1,0 +1,48 @@
+{% extends "base_publica.html" %}
+
+{% block titulo %}Acesso seguro{% endblock %}
+{% block conteudo %}
+<main class="acesso-layout">
+    <section class="acesso-contexto" aria-label="Apresentação do ContaView">
+        <a class="marca marca-publica" href="{% url 'nucleo:login' %}">
+            <span class="marca-simbolo">CV</span>
+            <span class="marca-texto"><strong>ContaView</strong><small>Rotina contábil</small></span>
+        </a>
+        <div class="acesso-chamada">
+            <p class="sobretitulo">Ambiente de trabalho</p>
+            <h1>Organize a rotina.<br>Confira com segurança.</h1>
+            <p>Arquivos, pendências e entregas reunidos em um fluxo contábil rastreável.</p>
+        </div>
+        <p class="acesso-rodape">Acesso restrito à profissional autorizada.</p>
+    </section>
+
+    <section class="acesso-formulario">
+        <div class="cartao-acesso">
+            <div class="marca-compacta"><span class="marca-simbolo">CV</span><strong>ContaView</strong></div>
+            <p class="sobretitulo">Acesso seguro</p>
+            <h2>Entre no seu espaço de trabalho</h2>
+            <p class="apoio-formulario">Use as credenciais cadastradas para continuar.</p>
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="proximo" value="{{ proximo }}">
+                {% if formulario.non_field_errors %}
+                    <div class="erro-formulario" role="alert">{{ formulario.non_field_errors.0 }}</div>
+                {% endif %}
+                <div class="grupo-campo">
+                    <label for="{{ formulario.username.id_for_label }}">{{ formulario.username.label }}</label>
+                    {{ formulario.username }}
+                    {% if formulario.username.errors %}<small class="campo-erro">{{ formulario.username.errors.0 }}</small>{% endif %}
+                </div>
+                <div class="grupo-campo">
+                    <label for="{{ formulario.password.id_for_label }}">{{ formulario.password.label }}</label>
+                    {{ formulario.password }}
+                    {% if formulario.password.errors %}<small class="campo-erro">{{ formulario.password.errors.0 }}</small>{% endif %}
+                </div>
+                <button class="botao-primario botao-largo" type="submit">Entrar</button>
+            </form>
+            <p class="nota-seguranca">A sessão expira após um período de inatividade e é encerrada ao fechar o navegador.</p>
+        </div>
+    </section>
+</main>
+{% endblock %}

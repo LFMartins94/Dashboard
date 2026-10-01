@@ -135,6 +135,7 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
     border-radius: 12px;
     background: #272e29;
 }
+.nota-ambiente:hover { border-color: color-mix(in srgb, var(--acento) 65%, var(--lateral-linha)); }
 [data-theme="escuro"] .nota-ambiente { background: #17201c; }
 .nota-ambiente div { display: grid; min-width: 0; }
 .nota-ambiente strong { font-size: 11px; }
@@ -156,6 +157,14 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 }
 .botao-tema:hover, .botao-tema:focus-visible { color: white; background: #2b332e; outline: none; }
 .botao-tema svg { width: 15px; height: 15px; }
+.usuario-rodape { display: flex; align-items: center; gap: 9px; padding: 12px 8px 0; border-top: 1px solid var(--lateral-linha); }
+.avatar-usuario { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: white; background: #718078; font-size: 10px; font-weight: 800; }
+.dados-usuario { display: grid; min-width: 0; flex: 1; }
+.dados-usuario strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dados-usuario small { margin-top: 2px; color: var(--lateral-suave); font-size: 9px; }
+.botao-sair { display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 7px; color: var(--lateral-suave); background: transparent; cursor: pointer; }
+.botao-sair:hover, .botao-sair:focus-visible { color: white; background: #303934; outline: none; }
+.botao-sair svg { width: 15px; height: 15px; }
 
 .area-principal { min-height: 100vh; margin-left: 252px; }
 .cabecalho {
@@ -171,6 +180,10 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 }
 .caminho { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
 .caminho strong { color: var(--tinta-suave); font-weight: 650; }
+.acoes-cabecalho { display: flex; align-items: center; gap: 10px; }
+.contexto-cabecalho { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--linha); border-radius: 9px; color: var(--tinta-suave); background: var(--cartao); font-size: 10px; }
+.contexto-cabecalho:hover { border-color: var(--acento); }
+.contexto-cabecalho strong { color: var(--acento); }
 .status-sistema { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; }
 .status-sistema > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-sistema.neutro { color: var(--tinta-suave); background: var(--linha); }
@@ -203,6 +216,55 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 .botao-primario svg { width: 15px; height: 15px; }
 .botao-secundario { border: 1px solid var(--linha); background: var(--cartao); }
 .botao-secundario:hover { border-color: var(--acento); color: var(--acento); }
+.botao-largo { width: 100%; min-height: 43px; }
+.botao-primario:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
+
+.grupo-campo { display: grid; gap: 7px; margin-bottom: 16px; }
+.grupo-campo label { color: var(--tinta-suave); font-size: 11px; font-weight: 700; }
+.grupo-campo input, .grupo-campo select {
+    width: 100%;
+    min-height: 43px;
+    padding: 10px 12px;
+    border: 1px solid var(--linha);
+    border-radius: 9px;
+    color: var(--tinta);
+    background: var(--cartao);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+.grupo-campo input:focus, .grupo-campo select:focus { border-color: var(--acento); box-shadow: 0 0 0 3px var(--acento-suave); }
+.campo-erro { color: var(--erro); font-size: 10px; }
+.erro-formulario { margin-bottom: 16px; padding: 11px 12px; border: 1px solid color-mix(in srgb, var(--erro) 40%, transparent); border-radius: 9px; color: var(--erro); background: color-mix(in srgb, var(--erro) 9%, transparent); font-size: 11px; line-height: 1.5; }
+.nota-seguranca { margin: 17px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; text-align: center; }
+
+.pagina-publica { min-height: 100vh; overflow-x: hidden; }
+.tema-publico { position: fixed; z-index: 5; top: 20px; right: 24px; padding: 8px 11px; border: 1px solid var(--linha); border-radius: 999px; color: var(--tinta-suave); background: var(--cartao); font-size: 10px; font-weight: 700; cursor: pointer; }
+.tema-publico:hover { border-color: var(--acento); color: var(--acento); }
+.acesso-layout { display: grid; min-height: 100vh; grid-template-columns: minmax(360px, .9fr) minmax(500px, 1.1fr); }
+.acesso-contexto { position: relative; display: flex; overflow: hidden; flex-direction: column; padding: 38px 46px; color: white; background: var(--lateral); }
+.acesso-contexto::before, .acesso-contexto::after { position: absolute; border: 1px solid #4c5951; border-radius: 50%; content: ""; opacity: .5; }
+.acesso-contexto::before { right: -170px; bottom: -200px; width: 480px; height: 480px; }
+.acesso-contexto::after { right: 45px; bottom: 70px; width: 170px; height: 170px; }
+.marca-publica { position: relative; z-index: 1; padding-inline: 0; }
+.acesso-chamada { position: relative; z-index: 1; margin: auto 0; }
+.acesso-chamada h1 { max-width: 560px; color: white; font-size: clamp(37px, 5vw, 66px); }
+.acesso-chamada > p:not(.sobretitulo) { max-width: 490px; margin: 20px 0 0; color: var(--lateral-suave); font-size: 14px; line-height: 1.7; }
+.acesso-rodape { position: relative; z-index: 1; margin: 0; color: var(--lateral-suave); font-size: 10px; }
+.acesso-formulario { display: grid; place-items: center; padding: 56px 28px; }
+.cartao-acesso { width: min(100%, 410px); padding: 36px; border: 1px solid var(--linha); border-radius: 20px; background: var(--cartao); box-shadow: var(--sombra); }
+.marca-compacta { display: none; align-items: center; gap: 9px; margin-bottom: 34px; }
+.marca-compacta strong { font-size: 17px; letter-spacing: -.04em; }
+.cartao-acesso h2 { margin: 0; font-size: 25px; letter-spacing: -.045em; }
+.apoio-formulario { margin: 9px 0 25px; color: var(--tinta-suave); font-size: 12px; line-height: 1.5; }
+
+.seletor-contexto { display: grid; min-height: calc(100vh - 190px); grid-template-columns: minmax(0, 1fr) minmax(330px, 430px); align-items: center; gap: 60px; max-width: 1100px; margin: 0 auto; }
+.cabecalho-contexto > p:not(.sobretitulo) { max-width: 530px; margin: 15px 0 0; color: var(--tinta-suave); font-size: 14px; line-height: 1.6; }
+.cartao-contexto { padding: 28px; border: 1px solid var(--linha); border-radius: 18px; background: var(--cartao); box-shadow: var(--sombra); }
+.erro-publico { display: grid; min-height: 100vh; place-items: center; padding: 32px; }
+.erro-publico .codigo-erro { margin-bottom: 4px; font-size: 92px; }
+.erro-publico h1 { font-size: 30px; }
+.erro-publico .cartao-acesso > p:not(.codigo-erro, .sobretitulo, .referencia-erro) { color: var(--tinta-suave); line-height: 1.6; }
 
 .grade-metricas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .metrica { min-height: 145px; padding: 19px; border: 1px solid var(--linha); border-radius: 14px; background: var(--cartao); box-shadow: var(--sombra); }
@@ -246,6 +308,10 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
     .conteudo { padding-inline: 24px; }
     .cabecalho { padding-inline: 24px; }
     .grade-conteudo { grid-template-columns: 1fr; }
+    .acesso-layout { grid-template-columns: 1fr; }
+    .acesso-contexto { display: none; }
+    .marca-compacta { display: flex; }
+    .seletor-contexto { grid-template-columns: 1fr; gap: 30px; align-content: center; }
 }
 
 @media (max-width: 760px) {
@@ -259,6 +325,10 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
     .apresentacao { align-items: flex-start; flex-direction: column; }
     .grade-metricas { grid-template-columns: 1fr; }
     .cabecalho-status { display: none; }
+    .contexto-cabecalho span { display: none; }
+    .cartao-acesso { padding: 28px 22px; }
+    .acesso-formulario { padding: 66px 18px 30px; }
+    .tema-publico { top: 14px; right: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

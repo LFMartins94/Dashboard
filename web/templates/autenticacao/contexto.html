@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="seletor-contexto">
+    <div class="cabecalho-contexto">
+        <p class="sobretitulo">Antes de começar</p>
+        <h1>Escolha o contexto de trabalho.</h1>
+        <p>Empresa e competência acompanham todas as consultas desta sessão.</p>
+    </div>
+    <form class="cartao-contexto" method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="proximo" value="{{ proximo }}">
+        {% if formulario.non_field_errors %}
+            <div class="erro-formulario" role="alert">{{ formulario.non_field_errors.0 }}</div>
+        {% endif %}
+        <div class="grupo-campo">
+            <label for="{{ formulario.empresa.id_for_label }}">{{ formulario.empresa.label }}</label>
+            {{ formulario.empresa }}
+            {% if formulario.empresa.errors %}<small class="campo-erro">{{ formulario.empresa.errors.0 }}</small>{% endif %}
+        </div>
+        <div class="grupo-campo">
+            <label for="{{ formulario.competencia.id_for_label }}">{{ formulario.competencia.label }}</label>
+            {{ formulario.competencia }}
+            {% if formulario.competencia.errors %}<small class="campo-erro">{{ formulario.competencia.errors.0 }}</small>{% endif %}
+        </div>
+        <button class="botao-primario botao-largo" type="submit"{% if not tem_empresas %} disabled{% endif %}>Continuar</button>
+        <p class="nota-seguranca">A seleção fica vinculada somente à sua sessão atual.</p>
+    </form>
+</section>
+{% endblock %}

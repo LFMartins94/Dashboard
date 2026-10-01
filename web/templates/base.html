@@ -54,14 +54,32 @@
             </nav>
 
             <div class="barra-lateral-rodape">
-                <div class="nota-ambiente">
+                <a class="nota-ambiente" href="{% url 'nucleo:selecionar_contexto' %}">
                     <span class="ponto-status" aria-hidden="true"></span>
-                    <div><strong>Nova aplicação</strong><small>Base Django em preparação</small></div>
-                </div>
+                    <div>
+                        {% if contexto_atual %}
+                            <strong>{{ contexto_atual.empresa_nome }}</strong>
+                            <small>Competência {{ contexto_atual.competencia_exibicao }}</small>
+                        {% else %}
+                            <strong>Selecionar contexto</strong>
+                            <small>Escolha empresa e competência</small>
+                        {% endif %}
+                    </div>
+                </a>
                 <button class="botao-tema" id="botao-tema" type="button" aria-pressed="false">
                     <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
                     <span>Modo escuro</span>
                 </button>
+                <div class="usuario-rodape">
+                    <span class="avatar-usuario">{{ request.user.username|slice:":2"|upper }}</span>
+                    <span class="dados-usuario"><strong>{{ request.user.get_short_name|default:request.user.username }}</strong><small>Acesso contábil</small></span>
+                    <form method="post" action="{% url 'nucleo:logout' %}">
+                        {% csrf_token %}
+                        <button class="botao-sair" type="submit" aria-label="Sair da aplicação" title="Sair">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>
+                        </button>
+                    </form>
+                </div>
             </div>
         </aside>
 
@@ -72,11 +90,19 @@
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
                 <div class="caminho"><span>ContaView</span><span>/</span><strong>{{ titulo_pagina|default:"Trabalho" }}</strong></div>
-                <div class="cabecalho-status"
-                     hx-get="{% url 'nucleo:estado_aplicacao' %}"
-                     hx-trigger="load, every 60s"
-                     hx-swap="innerHTML">
-                    <span class="status-sistema neutro"><span></span>Verificando aplicação</span>
+                <div class="acoes-cabecalho">
+                    {% if contexto_atual %}
+                        <a class="contexto-cabecalho" href="{% url 'nucleo:selecionar_contexto' %}">
+                            <span>{{ contexto_atual.empresa_nome }}</span>
+                            <strong>{{ contexto_atual.competencia_exibicao }}</strong>
+                        </a>
+                    {% endif %}
+                    <div class="cabecalho-status"
+                         hx-get="{% url 'nucleo:estado_aplicacao' %}"
+                         hx-trigger="load, every 60s"
+                         hx-swap="innerHTML">
+                        <span class="status-sistema neutro"><span></span>Verificando aplicação</span>
+                    </div>
                 </div>
             </header>
 
