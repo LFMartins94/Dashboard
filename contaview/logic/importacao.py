@@ -214,6 +214,72 @@ def executar_preparacao(
     }
 
 
+def salvar_preparacao_confirmada(
+    arquivo: BinaryIO, empresa_id: int, nome_aba: str,
+    tipo_documento: str, periodo: str | None,
+    mapeamento: dict[str, str], linha_cabecalho: int | None = None,
+) -> dict:
+    """Confirma uma prévia para uma empresa previamente validada pela aplicação.
+
+    Este é o ponto de integração do Django com a preparação legada. A
+    seleção da empresa continua sob responsabilidade da camada autenticada;
+    o banco volta a validar o identificador dentro da transação.
+    """
+    if not isinstance(empresa_id, int) or empresa_id <= 0:
+        return {"sucesso": False, "erro": "Empresa inválida para importação."}
+
+    conteudo = arquivo.read()
+    arquivo.seek(0)
+    resultado = inspecionar_planilha(
+        arquivo, linha_cabecalho=linha_cabecalho, aba_alvo=nome_aba
+    )
+    if not resultado["sucesso"]:
+        return resultado
+    aba = next((item for item in resultado["abas"] if item["nome"] == nome_aba), None)
+    if aba is None:
+        return {"sucesso": False, "erro": "Aba selecionada não encontrada no arquivo."}
+    if periodo and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", periodo):
+        return {"sucesso": False, "erro": "Competência inválida."}
+    colunas = [coluna for coluna in mapeamento.values() if coluna]
+    if any(coluna not in aba["cabecalhos"] for coluna in colunas):
+        return {
+            "sucesso": False,
+            "erro": "O mapeamento contém colunas fora da aba selecionada.",
+        }
+    if len(set(colunas)) != len(colunas):
+        return {
+            "sucesso": False,
+            "erro": "Cada coluna deve ser mapeada para um único campo.",
+        }
+
+    mapeamento_limpo = {
+        campo: coluna for campo, coluna in mapeamento.items() if coluna
+    }
+    linhas = preparar_linhas_mapeadas(
+        aba["linhas"], mapeamento_limpo, tipo_documento, periodo
+    )
+    salvo = salvar_lote_preparacao(
+        empresa_id,
+        getattr(arquivo, "name", "arquivo"),
+        hashlib.sha256(conteudo).hexdigest(),
+        conteudo,
+        nome_aba,
+        tipo_documento,
+        periodo,
+        {
+            "linha_cabecalho": aba["linha_cabecalho"],
+            "colunas": mapeamento_limpo,
+        },
+        linhas,
+    )
+    return {
+        "sucesso": True,
+        "empresa_id": empresa_id,
+        "pendentes": sum(bool(linha["pendencias"]) for linha in linhas),
+        **salvo,
+    }
+
+
 def prever_importacao(
     arquivo: BinaryIO, linha_cabecalho: int | None = None,
     aba_alvo: str | None = None,

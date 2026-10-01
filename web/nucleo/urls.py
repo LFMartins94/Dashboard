@@ -24,7 +24,22 @@ urlpatterns = [
         views.alternar_competencia_trabalho,
         name="alternar_competencia_trabalho",
     ),
-    path("entradas/", views.modulo, {"secao": "entradas"}, name="entradas"),
+    path("entradas/", views.entradas, name="entradas"),
+    path(
+        "entradas/<uuid:identificador>/mapear/",
+        views.mapear_entrada,
+        name="mapear_entrada",
+    ),
+    path(
+        "entradas/<uuid:identificador>/confirmar/",
+        views.confirmar_entrada,
+        name="confirmar_entrada",
+    ),
+    path(
+        "entradas/<uuid:identificador>/descartar/",
+        views.descartar_entrada,
+        name="descartar_entrada",
+    ),
     path(
         "conferencia/",
         views.modulo,

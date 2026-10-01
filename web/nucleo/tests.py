@@ -231,13 +231,14 @@ class ContextoTrabalhoTestes(TestCase):
         self.assertContains(segunda, "Empresa Dois")
         self.assertNotContains(segunda, "Empresa Um")
 
-    def test_rota_direta_funciona_quando_contexto_existe(self):
+    @mock.patch("nucleo.views.listar_lotes_contexto", return_value=[])
+    def test_rota_direta_funciona_quando_contexto_existe(self, _listar):
         definir_contexto(self.client)
 
         resposta = self.client.get(reverse("nucleo:entradas"))
 
         self.assertEqual(resposta.status_code, 200)
-        self.assertContains(resposta, "Recebimento, leitura e preparação")
+        self.assertContains(resposta, "Receba primeiro. Decida o destino depois.")
 
     @mock.patch("nucleo.servicos.contexto.connection.cursor")
     def test_validacao_de_empresa_usa_parametro_no_servidor(self, cursor):

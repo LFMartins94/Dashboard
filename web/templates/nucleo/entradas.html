@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao entradas-apresentacao">
+    <div>
+        <p class="sobretitulo">Entrada genérica</p>
+        <h1>Receba primeiro. Decida o destino depois.</h1>
+        <p class="descricao-pagina">
+            {{ contexto.empresa_nome }} · competência {{ contexto.competencia_exibicao }}.
+            O original é preservado e nenhum lançamento é criado nesta etapa.
+        </p>
+    </div>
+</section>
+
+<div class="grade-entradas">
+    <section class="painel painel-upload">
+        <header class="painel-cabecalho">
+            <p class="titulo-secao">Adicionar planilhas</p>
+            <p class="subtitulo-secao">XLSX, XLS ou CSV · até 20 MB e 30.000 linhas por aba</p>
+        </header>
+        <form class="formulario-upload" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <label class="area-upload" for="{{ formulario.arquivos.id_for_label }}">
+                <span class="icone-upload" aria-hidden="true">↑</span>
+                <strong>Selecione um ou mais arquivos</strong>
+                <small>O ContaView lerá abas e cabeçalhos antes de preparar qualquer dado.</small>
+                {{ formulario.arquivos }}
+            </label>
+            {% for erro in formulario.arquivos.errors %}<p class="erro-campo">{{ erro }}</p>{% endfor %}
+            <button class="botao-primario" type="submit">Ler arquivos</button>
+        </form>
+    </section>
+
+    <aside class="painel painel-garantias">
+        <header class="painel-cabecalho">
+            <p class="titulo-secao">Antes da preparação</p>
+            <p class="subtitulo-secao">Verificações automáticas desta entrada</p>
+        </header>
+        <ol class="lista-garantias">
+            <li><span>01</span><div><strong>Conteúdo válido</strong><small>Extensão, tamanho e estrutura são conferidos.</small></div></li>
+            <li><span>02</span><div><strong>Reenvio bloqueado</strong><small>O hash é comparado antes de criar um novo lote.</small></div></li>
+            <li><span>03</span><div><strong>Decisão humana</strong><small>Aba, cabeçalho, tipo e campos exigem confirmação.</small></div></li>
+        </ol>
+    </aside>
+</div>
+
+<section class="painel secao-entradas">
+    <header class="painel-cabecalho painel-cabecalho-linha">
+        <div><p class="titulo-secao">Aguardando mapeamento</p><p class="subtitulo-secao">Arquivos preservados no contexto atual</p></div>
+        <span class="contador-painel">{{ temporarios|length }}</span>
+    </header>
+    <div class="lista-arquivos-entrada">
+        {% for arquivo in temporarios %}
+        <article class="arquivo-entrada">
+            <span class="extensao-arquivo">{{ arquivo.extensao|upper }}</span>
+            <div><strong>{{ arquivo.nome_original }}</strong><small>{{ arquivo.tamanho_bytes|filesizeformat }} · recebido em {{ arquivo.criado_em|date:"d/m/Y H:i" }}</small></div>
+            <a class="botao-secundario" href="{% url 'nucleo:mapear_entrada' arquivo.id %}">Mapear</a>
+            <form method="post" action="{% url 'nucleo:descartar_entrada' arquivo.id %}">
+                {% csrf_token %}<button class="botao-texto perigo" type="submit">Descartar</button>
+            </form>
+        </article>
+        {% empty %}
+        <div class="vazio-painel"><strong>Nenhum arquivo aguardando.</strong><span>Os novos uploads aparecerão aqui até a confirmação.</span></div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="painel secao-entradas">
+    <header class="painel-cabecalho painel-cabecalho-linha">
+        <div><p class="titulo-secao">Lotes preparados</p><p class="subtitulo-secao">Entradas desta empresa e competência</p></div>
+        <span class="contador-painel">{{ lotes|length }}</span>
+    </header>
+    <div class="tabela-responsiva">
+        <table class="tabela-entradas">
+            <thead><tr><th>Lote</th><th>Arquivo e aba</th><th>Tipo</th><th>Linhas</th><th>Pendências</th><th>Estado</th></tr></thead>
+            <tbody>
+                {% for lote in lotes %}
+                <tr>
+                    <td>#{{ lote.id }}</td>
+                    <td><strong>{{ lote.nome_arquivo }}</strong><small>{{ lote.aba }}</small></td>
+                    <td>{{ lote.tipo_documento }}</td><td>{{ lote.total_linhas }}</td><td>{{ lote.pendentes }}</td><td>{{ lote.status }}</td>
+                </tr>
+                {% empty %}<tr><td colspan="6" class="celula-vazia">Nenhum lote preparado nesta competência.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

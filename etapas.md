@@ -163,7 +163,7 @@ Dar à contadora uma fila de tarefas, em vez de um painel de indicadores sem aç
 
 ## Etapa 5 — Entrada genérica de arquivos
 
-**Status:** aguardando.
+**Status:** concluída.
 
 ### Objetivo
 

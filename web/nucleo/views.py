@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -19,10 +20,14 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from .decoradores import contexto_nao_obrigatorio
 from .formularios import (
     FormularioAlternarCompetencia,
+    FormularioConfigurarEntrada,
     FormularioContexto,
     FormularioEstadoItem,
     FormularioLogin,
+    FormularioMapeamentoEntrada,
+    FormularioUploadEntrada,
 )
+from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
     carregar_contexto,
     exigir_contexto,
@@ -36,6 +41,15 @@ from .servicos.limite_login import (
     limpar_falhas,
     registrar_falha,
     segundos_para_liberacao,
+)
+from .servicos.entradas import (
+    ErroEntrada,
+    confirmar_preparacao,
+    descartar_arquivo,
+    inspecionar_selecao,
+    listar_lotes_contexto,
+    obter_arquivo_contexto,
+    receber_arquivo,
 )
 from .servicos.trabalho import (
     PainelTrabalho,
@@ -295,6 +309,239 @@ def alternar_competencia_trabalho(requisicao: HttpRequest) -> HttpResponse:
     else:
         messages.success(requisicao, "Contexto de trabalho atualizado.")
     return redirect("nucleo:trabalho")
+
+
+@require_http_methods(["GET", "POST"])
+def entradas(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    formulario = FormularioUploadEntrada(
+        requisicao.POST or None,
+        requisicao.FILES or None,
+    )
+    if requisicao.method == "POST" and formulario.is_valid():
+        recebidos = []
+        for arquivo_enviado in formulario.cleaned_data["arquivos"]:
+            try:
+                recebidos.append(
+                    receber_arquivo(arquivo_enviado, contexto, requisicao.user)
+                )
+            except ErroEntrada as erro:
+                messages.error(requisicao, str(erro))
+            except DatabaseError:
+                logger.exception("Falha de banco ao receber arquivo de entrada")
+                messages.error(
+                    requisicao,
+                    f"Arquivo {arquivo_enviado.name}: não foi possível verificar ou preservar o arquivo.",
+                )
+        if recebidos:
+            messages.success(
+                requisicao,
+                f"{len(recebidos)} arquivo(s) recebido(s) para mapeamento.",
+            )
+            if len(recebidos) == 1:
+                return redirect("nucleo:mapear_entrada", identificador=recebidos[0].id)
+            return redirect("nucleo:entradas")
+
+    try:
+        temporarios = list(ArquivoEntradaTemporario.objects.filter(
+            usuario=requisicao.user,
+            empresa_id=contexto.empresa_id,
+            competencia=contexto.competencia,
+            status__in=(
+                EstadoArquivoEntrada.RECEBIDO,
+                EstadoArquivoEntrada.EM_MAPEAMENTO,
+            ),
+        ).order_by("-criado_em"))
+    except DatabaseError:
+        logger.exception("Falha ao listar arquivos temporários de entrada")
+        temporarios = []
+        messages.error(requisicao, "Não foi possível carregar os arquivos em mapeamento.")
+    try:
+        lotes = listar_lotes_contexto(contexto)
+    except DatabaseError:
+        logger.exception("Falha ao listar lotes de entrada")
+        lotes = []
+        messages.error(requisicao, "Não foi possível carregar os lotes preparados.")
+    return render(
+        requisicao,
+        "nucleo/entradas.html",
+        {
+            "titulo_pagina": "Entradas",
+            "secao_ativa": "entradas",
+            "contexto": contexto,
+            "formulario": formulario,
+            "temporarios": temporarios,
+            "lotes": lotes,
+        },
+    )
+
+
+def _contexto_mapeamento(requisicao, arquivo, usar_ia=False):
+    abas = arquivo.inspecao.get("abas", [])
+    aba_padrao = abas[0]["nome"] if abas else ""
+    aba_solicitada = requisicao.POST.get("aba") or requisicao.GET.get("aba") or aba_padrao
+    resumo_aba = next((item for item in abas if item["nome"] == aba_solicitada), None)
+    cabecalho_padrao = resumo_aba["linha_cabecalho"] if resumo_aba else 0
+    valor_cabecalho = (
+        requisicao.POST.get("linha_cabecalho")
+        or requisicao.GET.get("linha_cabecalho")
+        or cabecalho_padrao
+    )
+    tipo = (
+        requisicao.POST.get("tipo_documento")
+        or requisicao.GET.get("tipo_documento")
+        or "lancamentos"
+    )
+    try:
+        linha_cabecalho = int(valor_cabecalho)
+    except (TypeError, ValueError):
+        linha_cabecalho = cabecalho_padrao
+
+    configurar = FormularioConfigurarEntrada(
+        initial={
+            "aba": aba_solicitada,
+            "linha_cabecalho": linha_cabecalho,
+            "tipo_documento": tipo,
+        },
+        abas=abas,
+    )
+    selecao = inspecionar_selecao(
+        arquivo, aba_solicitada, linha_cabecalho, tipo, usar_ia=usar_ia
+    )
+    inicial = {
+        "aba": aba_solicitada,
+        "linha_cabecalho": linha_cabecalho,
+        "tipo_documento": tipo,
+        **selecao.sugestao,
+    }
+    formulario = FormularioMapeamentoEntrada(
+        initial=inicial,
+        cabecalhos=selecao.aba["cabecalhos"],
+        sugestao=selecao.sugestao,
+    )
+    previa = [
+        {
+            "numero_linha": linha["numero_linha"],
+            "valores": [linha["valores"].get(cabecalho, "") for cabecalho in selecao.aba["cabecalhos"]],
+        }
+        for linha in selecao.aba["linhas"][:12]
+    ]
+    return {
+        "configurar": configurar,
+        "formulario": formulario,
+        "campos_mapeamento": [
+            formulario[campo] for campo, _ in FormularioMapeamentoEntrada.CAMPOS
+        ],
+        "selecao": selecao,
+        "previa": previa,
+        "sugestao_incompleta": not {"data", "valor"}.issubset(selecao.sugestao),
+        "ia_solicitada": usar_ia,
+    }
+
+
+@require_http_methods(["GET", "POST"])
+def mapear_entrada(requisicao: HttpRequest, identificador) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        arquivo = obter_arquivo_contexto(identificador, contexto, requisicao.user)
+        dados = _contexto_mapeamento(
+            requisicao,
+            arquivo,
+            usar_ia=(requisicao.method == "POST" and requisicao.POST.get("acao") == "sugerir_ia"),
+        )
+    except ErroEntrada as erro:
+        messages.error(requisicao, str(erro))
+        return redirect("nucleo:entradas")
+    except DatabaseError:
+        logger.exception("Falha ao carregar mapeamento de entrada")
+        messages.error(requisicao, "Não foi possível carregar o arquivo para mapeamento.")
+        return redirect("nucleo:entradas")
+    return render(
+        requisicao,
+        "nucleo/mapear_entrada.html",
+        {
+            "titulo_pagina": "Mapear entrada",
+            "secao_ativa": "entradas",
+            "contexto": contexto,
+            "arquivo": arquivo,
+            **dados,
+        },
+    )
+
+
+@require_POST
+def confirmar_entrada(requisicao: HttpRequest, identificador) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        arquivo = obter_arquivo_contexto(identificador, contexto, requisicao.user)
+        nome_aba = requisicao.POST.get("aba", "")
+        linha_cabecalho = int(requisicao.POST.get("linha_cabecalho", "0"))
+        tipo_documento = requisicao.POST.get("tipo_documento", "")
+        selecao = inspecionar_selecao(
+            arquivo, nome_aba, linha_cabecalho, tipo_documento
+        )
+        formulario = FormularioMapeamentoEntrada(
+            requisicao.POST,
+            cabecalhos=selecao.aba["cabecalhos"],
+        )
+        if not formulario.is_valid():
+            messages.error(
+                requisicao,
+                "Revise o mapeamento: cada coluna original pode ser usada uma vez.",
+            )
+            consulta = urlencode({
+                "aba": nome_aba,
+                "linha_cabecalho": linha_cabecalho,
+                "tipo_documento": tipo_documento,
+            })
+            return redirect(
+                f"{reverse('nucleo:mapear_entrada', args=[identificador])}?{consulta}"
+            )
+        mapeamento = {
+            campo: formulario.cleaned_data.get(campo, "")
+            for campo, _ in FormularioMapeamentoEntrada.CAMPOS
+        }
+        resultado = confirmar_preparacao(
+            arquivo,
+            contexto,
+            requisicao.user,
+            nome_aba,
+            linha_cabecalho,
+            tipo_documento,
+            mapeamento,
+        )
+    except (ErroEntrada, ValueError) as erro:
+        messages.error(requisicao, str(erro))
+        return redirect("nucleo:mapear_entrada", identificador=identificador)
+    except DatabaseError:
+        logger.exception("Falha ao confirmar entrada")
+        messages.error(requisicao, "Não foi possível preparar o arquivo. Nenhum lote parcial foi mantido.")
+        return redirect("nucleo:mapear_entrada", identificador=identificador)
+
+    if resultado.get("duplicado"):
+        messages.info(requisicao, f"O arquivo já corresponde ao lote {resultado['lote_id']}.")
+    else:
+        messages.success(
+            requisicao,
+            f"Lote {resultado['lote_id']} preparado com {resultado['total_linhas']} linha(s) e {resultado['pendentes']} pendência(s).",
+        )
+    return redirect("nucleo:entradas")
+
+
+@require_POST
+def descartar_entrada(requisicao: HttpRequest, identificador) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        arquivo = obter_arquivo_contexto(identificador, contexto, requisicao.user)
+        descartar_arquivo(arquivo, contexto, requisicao.user)
+    except ErroEntrada as erro:
+        messages.error(requisicao, str(erro))
+    except DatabaseError:
+        logger.exception("Falha ao descartar arquivo temporário")
+        messages.error(requisicao, "Não foi possível descartar o arquivo agora.")
+    else:
+        messages.success(requisicao, "Arquivo descartado da área temporária.")
+    return redirect("nucleo:entradas")
 
 
 @require_GET

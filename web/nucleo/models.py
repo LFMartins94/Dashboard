@@ -1,5 +1,7 @@
 """Modelos internos da aplicação web."""
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -154,5 +156,121 @@ class ItemChecklistTrabalho(models.Model):
             models.Index(
                 fields=["competencia_trabalho", "estado", "ordem"],
                 name="idx_item_comp_estado",
+            ),
+        ]
+
+
+class EstadoArquivoEntrada(models.TextChoices):
+    RECEBIDO = "recebido", "Recebido"
+    EM_MAPEAMENTO = "em_mapeamento", "Em mapeamento"
+    PREPARADO = "preparado", "Preparado"
+    DESCARTADO = "descartado", "Descartado"
+
+
+class ArquivoEntradaTemporario(models.Model):
+    """Arquivo preservado enquanto a contadora confirma como interpretá-lo."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="arquivos_entrada_temporarios",
+    )
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    nome_original = models.CharField(max_length=255)
+    extensao = models.CharField(max_length=5)
+    tamanho_bytes = models.PositiveIntegerField()
+    arquivo_sha256 = models.CharField(max_length=64)
+    conteudo = models.BinaryField()
+    inspecao = models.JSONField(default=dict)
+    status = models.CharField(
+        max_length=20,
+        choices=EstadoArquivoEntrada.choices,
+        default=EstadoArquivoEntrada.RECEBIDO,
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_arquivos_entrada_temporarios"
+        verbose_name = "arquivo temporário de entrada"
+        verbose_name_plural = "arquivos temporários de entrada"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_arq_ent_empresa_pos"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"
+                ),
+                name="ck_arq_ent_periodo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(extensao__in=("xlsx", "xls", "csv")),
+                name="ck_arq_ent_extensao",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=EstadoArquivoEntrada.values),
+                name="ck_arq_ent_status",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["usuario", "empresa_id", "competencia", "status"],
+                name="idx_arq_ent_contexto",
+            ),
+            models.Index(
+                fields=["empresa_id", "arquivo_sha256"],
+                name="idx_arq_ent_hash",
+            ),
+        ]
+
+
+class ModeloMapeamentoEntrada(models.Model):
+    """Mapeamento confirmado e reutilizável para uma estrutura de planilha."""
+
+    empresa_id = models.PositiveIntegerField()
+    assinatura_estrutura = models.CharField(max_length=64)
+    tipo_documento = models.CharField(max_length=20)
+    aba = models.CharField(max_length=255)
+    linha_cabecalho = models.PositiveIntegerField(default=0)
+    mapeamento = models.JSONField(default=dict)
+    vezes_utilizado = models.PositiveIntegerField(default=1)
+    confirmado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="modelos_mapeamento_confirmados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_modelos_mapeamento_entrada"
+        verbose_name = "modelo de mapeamento de entrada"
+        verbose_name_plural = "modelos de mapeamento de entrada"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa_id", "assinatura_estrutura", "tipo_documento"],
+                name="uq_mod_map_empresa_estrutura_tipo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_mod_map_empresa_pos"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    tipo_documento__in=(
+                        "extrato", "folha", "notas", "lancamentos", "outro"
+                    )
+                ),
+                name="ck_mod_map_tipo",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "assinatura_estrutura"],
+                name="idx_mod_map_estrutura",
             ),
         ]

@@ -62,6 +62,24 @@ Quando a estrutura é nova ou ambígua, a contadora corrige o mapeamento manualm
 
 A IA pode sugerir a relação entre nomes de colunas. Ela nunca escolhe sozinha a empresa, o tipo de documento, a competência ou o destino dos dados.
 
+### Entrada genérica implementada
+
+A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e preparação:
+
+- recebe vários arquivos pelo mesmo formulário;
+- valida nome, extensão, assinatura do conteúdo, tamanho e quantidade de linhas;
+- limita a expansão interna de XLSX para evitar arquivos compactados abusivos;
+- calcula SHA-256 e recusa reenvio da mesma empresa antes de criar outro lote;
+- permite escolher aba, linha do cabeçalho e tipo de documento;
+- exibe doze linhas de prévia sem gravar lançamentos;
+- sugere data, valor, descrição, tipo, conta e filial com regras locais;
+- oferece sugestão por IA somente quando data e valor não foram identificados localmente, enviando apenas os nomes das colunas;
+- preserva todas as colunas originais em `dados_brutos`;
+- salva o mapeamento confirmado para estruturas futuras;
+- grava o arquivo final em `lotes_importacao` e as linhas em `linhas_preparadas`.
+
+O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas pertencem à Etapa 6.
+
 ## Automação por nível de risco
 
 ### Automático
@@ -183,6 +201,7 @@ A nova implementação fica em `web/`. O legado permanece congelado durante a tr
 - [`docs/aceitacao_etapa2.md`](docs/aceitacao_etapa2.md): evidências do esqueleto Django, interface, diagnóstico e testes HTTP.
 - [`docs/aceitacao_etapa3.md`](docs/aceitacao_etapa3.md): controles de autenticação, sessão, contexto e evidências de segurança.
 - [`docs/aceitacao_etapa4.md`](docs/aceitacao_etapa4.md): fila operacional, checklist recorrente, consultas agregadas e aceite da tela Trabalho.
+- [`docs/aceitacao_etapa5.md`](docs/aceitacao_etapa5.md): upload genérico, prévia, mapeamento, hash, modelos reutilizáveis e aceite da preparação.
 
 ## Critério de conclusão do primeiro ciclo
 

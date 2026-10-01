@@ -4,11 +4,11 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 4 — tela Trabalho e fila operacional.
+**Etapa concluída:** Etapa 5 — entrada genérica de arquivos.
 
-**Etapa em andamento:** nenhuma. A Etapa 5 aguarda autorização do usuário.
+**Etapa em andamento:** nenhuma. A Etapa 6 aguarda autorização do usuário.
 
-**Situação da aplicação nova:** o Django possui login protegido, contexto persistente e uma tela Trabalho funcional. A fila reúne checklist, documentos aguardados, lotes pendentes, divergências, entregas, próxima ação e competências abertas. Entradas, Conferência, Entregas e Assistente ainda são páginas de espera até suas etapas específicas.
+**Situação da aplicação nova:** o Django possui login protegido, contexto persistente, tela Trabalho funcional e Entrada genérica operacional. A contadora pode enviar XLSX, XLS e CSV, escolher aba e cabeçalho, revisar a prévia, confirmar o mapeamento e criar um lote de preparação. Conferência, Entregas e Assistente ainda são páginas de espera até suas etapas específicas.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
@@ -39,7 +39,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 5 — Entrada genérica de arquivos.**
+**Etapa 6 — Conferência e aprovação do lote.**
 
 ### Evidências da Etapa 1 concluída
 
@@ -95,20 +95,36 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Evidência detalhada em `docs/aceitacao_etapa4.md`.
 - Nenhuma migração, DDL ou escrita foi feita no banco de produção.
 
+### Evidências da Etapa 5 concluída
+
+- Upload múltiplo de XLSX, XLS e CSV implementado em `/entradas/`.
+- Validação de 20 MB, 30.000 linhas por aba, assinatura do conteúdo e expansão de XLSX.
+- Hash SHA-256 consultado antes da criação do lote e também protegido no fluxo final.
+- Seleção de aba, cabeçalho e tipo com prévia das linhas originais.
+- Mapeamento manual e sugestão local; IA disponível somente quando data e valor não forem encontrados.
+- Modelos de mapeamento confirmados persistidos por empresa, estrutura e tipo.
+- A CAP anonimizada gera 42 linhas e preserva todas as colunas em `dados_brutos`.
+- Migração das tabelas temporárias e de modelos preparada com constraints, índices, RLS e revogação de `anon` e `authenticated`.
+- 46 testes Django e 30 testes legados aprovados.
+- Consulta somente leitura confirmou as tabelas de preparação existentes e RLS ativa no PostgreSQL real.
+- Evidência detalhada em `docs/aceitacao_etapa5.md`.
+- Nenhuma migração, DDL ou escrita foi feita no banco de produção.
+
 ### Ações da próxima etapa
 
-1. Implementar upload de XLSX, XLS e CSV.
-2. Ler abas, detectar cabeçalho e apresentar prévia.
-3. Mapear data, valor, descrição, tipo, conta e filial.
-4. Preservar colunas originais não mapeadas.
-5. Validar tamanho, extensão, quantidade de linhas e formatos brasileiros.
-6. Detectar reenvio pelo hash antes de criar lote.
-7. Aplicar sugestão local e usar IA somente quando as regras não forem suficientes.
-8. Salvar modelos de mapeamento confirmados.
+1. Exibir linhas prontas, pendentes e ignoradas do lote.
+2. Permitir correção de data, valor, tipo, conta e filial.
+3. Implementar edição em lote e colagem controlada.
+4. Mostrar totais de débito e crédito.
+5. Exigir a resolução de pendências antes da aprovação.
+6. Validar empresa e competência dentro da transação.
+7. Exigir confirmação explícita para substituir uma competência existente.
+8. Gravar `sequencial_lote`, histórico e estado final de forma atômica.
+9. Permitir reabrir ou cancelar uma preparação ainda não aprovada.
 
 ### Condição para iniciar
 
-A Etapa 5 ainda não foi autorizada. Não iniciá-la antes da autorização do usuário.
+A Etapa 6 ainda não foi autorizada. Não iniciá-la antes da autorização do usuário.
 
 ## Regra para continuar em outro local
 
@@ -131,8 +147,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 2 | Concluída | Django, interface, diagnósticos, logs, ativos e contêiner documentados |
 | 3 | Concluída | Login, sessão, CSRF, limitação de tentativas e contexto validados em 24 testes isolados |
 | 4 | Concluída | Fila operacional, checklist recorrente, próxima ação e 35 testes Django aprovados |
-| 5 | Aguardando autorização | Entrada genérica de XLSX, XLS e CSV |
-| 6 | Pendente | Depende da Etapa 5 |
+| 5 | Concluída | Upload, inspeção, prévia, mapeamento, hash e 46 testes Django aprovados |
+| 6 | Aguardando autorização | Conferência, correção e aprovação atômica do lote |
 | 7 | Pendente | Depende da Etapa 6 |
 | 8 | Pendente | Depende da Etapa 7 |
 | 9 | Pendente | Depende da Etapa 8 |

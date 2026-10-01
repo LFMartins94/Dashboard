@@ -8,6 +8,103 @@ from django.contrib.auth.forms import AuthenticationForm
 from .models import EstadoOperacional
 
 
+class SeletorArquivosMultiplos(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class CampoArquivosMultiplos(forms.FileField):
+    def clean(self, data, initial=None):
+        limpar = super().clean
+        if isinstance(data, (list, tuple)):
+            if not data:
+                raise forms.ValidationError("Selecione ao menos um arquivo.")
+            return [limpar(item, initial) for item in data]
+        return [limpar(data, initial)]
+
+
+class FormularioUploadEntrada(forms.Form):
+    arquivos = CampoArquivosMultiplos(
+        label="Planilhas",
+        widget=SeletorArquivosMultiplos(
+            attrs={
+                "accept": ".xlsx,.xls,.csv",
+                "multiple": True,
+            }
+        ),
+    )
+
+
+TIPOS_DOCUMENTO = (
+    ("extrato", "Extrato bancário"),
+    ("folha", "Folha de pagamento"),
+    ("notas", "Notas fiscais"),
+    ("lancamentos", "Lançamentos contábeis"),
+    ("outro", "Outro documento"),
+)
+
+
+class FormularioConfigurarEntrada(forms.Form):
+    aba = forms.ChoiceField(label="Aba")
+    linha_cabecalho = forms.IntegerField(
+        label="Linha do cabeçalho",
+        min_value=0,
+        help_text="Use 0 quando o arquivo não tiver cabeçalho.",
+    )
+    tipo_documento = forms.ChoiceField(
+        label="Tipo de documento", choices=TIPOS_DOCUMENTO
+    )
+
+    def __init__(self, *args, abas: list[dict] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["aba"].choices = [
+            (aba["nome"], aba["nome"]) for aba in (abas or [])
+        ]
+
+
+class FormularioMapeamentoEntrada(forms.Form):
+    CAMPOS = (
+        ("data", "Data"),
+        ("valor", "Valor"),
+        ("descricao", "Descrição"),
+        ("tipo", "Tipo (C/D)"),
+        ("conta_contabil", "Conta contábil"),
+        ("filial", "Filial"),
+    )
+
+    aba = forms.CharField(widget=forms.HiddenInput())
+    linha_cabecalho = forms.IntegerField(min_value=0, widget=forms.HiddenInput())
+    tipo_documento = forms.ChoiceField(
+        choices=TIPOS_DOCUMENTO, widget=forms.HiddenInput()
+    )
+
+    def __init__(
+        self, *args, cabecalhos: list[str] | None = None,
+        sugestao: dict[str, str] | None = None, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        escolhas = [("", "Não mapear")] + [
+            (cabecalho, cabecalho) for cabecalho in (cabecalhos or [])
+        ]
+        for campo, rotulo in self.CAMPOS:
+            self.fields[campo] = forms.ChoiceField(
+                label=rotulo,
+                choices=escolhas,
+                required=False,
+                initial=(sugestao or {}).get(campo, ""),
+            )
+
+    def clean(self):
+        dados = super().clean()
+        escolhidas = [
+            dados.get(campo) for campo, _ in self.CAMPOS if dados.get(campo)
+        ]
+        if len(escolhidas) != len(set(escolhidas)):
+            raise forms.ValidationError(
+                "Cada coluna original pode alimentar somente um campo."
+            )
+        return dados
+
+
 class FormularioLogin(AuthenticationForm):
     error_messages = {
         "invalid_login": "Usuário ou senha incorretos.",

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao mapa-apresentacao">
+    <div>
+        <p class="sobretitulo">Mapeamento de entrada</p>
+        <h1>{{ arquivo.nome_original }}</h1>
+        <p class="descricao-pagina">Escolha a estrutura e confirme o significado de cada coluna. As colunas não mapeadas continuam preservadas no original.</p>
+    </div>
+    <a class="botao-secundario" href="{% url 'nucleo:entradas' %}">Voltar para entradas</a>
+</section>
+
+<section class="painel configuracao-mapeamento">
+    <header class="painel-cabecalho"><p class="titulo-secao">1. Estrutura do arquivo</p><p class="subtitulo-secao">Troque a aba ou a linha do cabeçalho para atualizar a prévia</p></header>
+    <form class="formulario-configuracao" method="get">
+        <div class="campo"><label for="{{ configurar.aba.id_for_label }}">{{ configurar.aba.label }}</label>{{ configurar.aba }}</div>
+        <div class="campo"><label for="{{ configurar.linha_cabecalho.id_for_label }}">{{ configurar.linha_cabecalho.label }}</label>{{ configurar.linha_cabecalho }}<small>{{ configurar.linha_cabecalho.help_text }}</small></div>
+        <div class="campo"><label for="{{ configurar.tipo_documento.id_for_label }}">{{ configurar.tipo_documento.label }}</label>{{ configurar.tipo_documento }}</div>
+        <button class="botao-secundario" type="submit">Atualizar leitura</button>
+    </form>
+</section>
+
+<section class="painel previa-planilha">
+    <header class="painel-cabecalho painel-cabecalho-linha">
+        <div><p class="titulo-secao">2. Prévia da aba {{ selecao.aba.nome }}</p><p class="subtitulo-secao">Cabeçalho na linha {{ selecao.aba.linha_cabecalho }} · {{ selecao.aba.total_linhas }} linhas de dados</p></div>
+        <span class="contador-painel">12 linhas de prévia</span>
+    </header>
+    <div class="tabela-responsiva">
+        <table class="tabela-entradas tabela-previa">
+            <thead><tr><th>Linha</th>{% for cabecalho in selecao.aba.cabecalhos %}<th>{{ cabecalho }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for linha in previa %}<tr><td>{{ linha.numero_linha }}</td>{% for valor in linha.valores %}<td>{{ valor|default:"—" }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table>
+    </div>
+</section>
+
+<section class="painel secao-mapeamento">
+    <header class="painel-cabecalho painel-cabecalho-linha">
+        <div>
+            <p class="titulo-secao">3. Significado das colunas</p>
+            <p class="subtitulo-secao">
+                {% if selecao.modelo_reutilizado %}Modelo confirmado anteriormente para esta estrutura.{% elif ia_solicitada %}Sugestão revista com IA usando somente os nomes das colunas.{% else %}Sugestão produzida por regras locais.{% endif %}
+            </p>
+        </div>
+        {% if sugestao_incompleta and not ia_solicitada %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="sugerir_ia">
+            <input type="hidden" name="aba" value="{{ selecao.aba.nome }}">
+            <input type="hidden" name="linha_cabecalho" value="{{ selecao.aba.linha_cabecalho }}">
+            <input type="hidden" name="tipo_documento" value="{{ configurar.tipo_documento.value }}">
+            <button class="botao-secundario" type="submit">Pedir sugestão à IA</button>
+        </form>
+        {% endif %}
+    </header>
+    <form class="formulario-mapeamento" method="post" action="{% url 'nucleo:confirmar_entrada' arquivo.id %}">
+        {% csrf_token %}
+        {{ formulario.aba }}{{ formulario.linha_cabecalho }}{{ formulario.tipo_documento }}
+        <div class="grade-campos-mapeamento">
+            {% for campo in campos_mapeamento %}
+            <div class="campo"><label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{{ campo }}<small>Escolha a coluna original correspondente.</small></div>
+            {% endfor %}
+        </div>
+        {% for erro in formulario.non_field_errors %}<p class="erro-campo">{{ erro }}</p>{% endfor %}
+        <div class="rodape-mapeamento">
+            <p>A confirmação cria apenas um lote de preparação. A aprovação contábil acontece na etapa de conferência.</p>
+            <button class="botao-primario" type="submit">Confirmar e preparar linhas</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
