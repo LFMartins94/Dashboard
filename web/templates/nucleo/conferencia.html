@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<section class="cabecalho-pagina">
+  <div><span class="sobretitulo">Revisão antes do lançamento</span><h1>Conferência</h1><p>Revise cada linha preparada e resolva as pendências antes de aprovar.</p></div>
+  <a class="botao secundario" href="{% url 'nucleo:entradas' %}">Voltar às entradas</a>
+</section>
+
+{% if lotes %}<div class="cartao" style="margin-bottom:1rem"><label for="seletor-lote"><strong>Lote em conferência</strong></label><select id="seletor-lote" onchange="if(this.value) window.location='?lote='+this.value">
+{% for item in lotes %}<option value="{{ item.id }}"{% if lote and item.id == lote.id %} selected{% endif %}>{{ item.nome_arquivo }} · {{ item.total_linhas }} linha(s) · {{ item.status }}</option>{% endfor %}</select></div>{% endif %}
+
+{% if lote %}
+<div class="grade-kpis">
+  <div class="cartao-kpi"><span>Linhas</span><strong>{{ lote.total_linhas }}</strong></div>
+  <div class="cartao-kpi"><span>Validadas</span><strong>{{ validas }}</strong></div>
+  <div class="cartao-kpi alerta"><span>Pendências</span><strong>{{ pendentes }}</strong></div>
+  <div class="cartao-kpi"><span>Débitos</span><strong>R$ {{ total_debito|floatformat:2 }}</strong></div>
+  <div class="cartao-kpi"><span>Créditos</span><strong>R$ {{ total_credito|floatformat:2 }}</strong></div>
+</div>
+
+{% if confirmar_substituicao %}<div class="mensagem aviso"><strong>Já existem lançamentos nesta competência.</strong><p>{{ erro_substituicao }}</p><p>A substituição remove os lançamentos, conciliações e ocorrências dessa competência antes de gravar o lote.</p><form method="post"><input type="hidden" name="acao" value="aprovar"><input type="hidden" name="lote_id" value="{{ lote.id }}"><input type="hidden" name="substituir" value="1">{% csrf_token %}<button class="botao perigo" type="submit">Substituir e aprovar</button> <a class="botao secundario" href="?lote={{ lote.id }}">Cancelar</a></form></div>{% endif %}
+
+<div class="cartao" style="margin-top:1rem"><div class="cartao-cabecalho"><div><h2>Edição em lote</h2><p>Selecione linhas na tabela e aplique um valor comum.</p></div></div><form method="post" class="formulario-linha"><input type="hidden" name="acao" value="editar_lote"><input type="hidden" name="lote_id" value="{{ lote.id }}"><input type="hidden" name="linhas" id="linhas-selecionadas"><select name="campo"><option value="filial">Filial</option><option value="conta_contabil">Conta contábil</option><option value="tipo">Tipo C/D</option><option value="data">Data</option><option value="descricao">Descrição</option><option value="valor">Valor</option></select><input name="valor" placeholder="Novo valor" required><button class="botao primario" type="submit" onclick="document.getElementById('linhas-selecionadas').value=[...document.querySelectorAll('.linha-selecao:checked')].map(x=>x.value).join(',')">Aplicar às selecionadas</button>{% csrf_token %}</form></div>
+
+<div class="cartao" style="margin-top:1rem;overflow:auto"><table class="tabela"><thead><tr><th></th><th>Linha</th><th>Data</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Conta</th><th>Filial</th><th>Status</th><th></th></tr></thead><tbody>
+{% for linha in linhas %}<tr class="{% if linha.status != 'validado' %}linha-pendente{% endif %}"><td><input class="linha-selecao" type="checkbox" value="{{ linha.id }}"></td><form method="post"><td>{{ linha.numero_linha }}<input type="hidden" name="acao" value="editar_linha"><input type="hidden" name="lote_id" value="{{ lote.id }}"><input type="hidden" name="linha_id" value="{{ linha.id }}"></td><td><input name="data" value="{% if linha.data %}{{ linha.data|date:'d/m/Y' }}{% endif %}" placeholder="DD/MM/AAAA"></td><td><input name="descricao" value="{{ linha.descricao|default:'' }}"></td><td><input name="valor" value="{{ linha.valor|default:'' }}"></td><td><input name="tipo" value="{{ linha.tipo|default:'' }}" maxlength="1"></td><td><input name="conta_contabil" value="{{ linha.conta_contabil|default:'' }}"></td><td><input name="filial" value="{{ linha.filial|default:'' }}"></td><td>{% if linha.status == 'validado' %}<span class="etiqueta sucesso">Validada</span>{% else %}<span class="etiqueta alerta">Pendente</span>{% for erro in linha.pendencias %}<small class="texto-erro">{{ erro }}</small>{% endfor %}{% endif %}</td><td><button class="botao pequeno" type="submit">Salvar</button>{% csrf_token %}</form></td></tr>{% endfor %}
+</tbody></table></div>
+
+<div class="acoes-rodape"><form method="post"><input type="hidden" name="acao" value="aprovar"><input type="hidden" name="lote_id" value="{{ lote.id }}"><input type="hidden" name="substituir" value="0">{% csrf_token %}<button class="botao primario" type="submit"{% if pendentes %} disabled title="Resolva as pendências primeiro"{% endif %}>Aprovar lote</button></form><form method="post"><input type="hidden" name="acao" value="{% if lote.status == 'cancelado' %}reabrir{% else %}cancelar{% endif %}"><input type="hidden" name="lote_id" value="{{ lote.id }}">{% csrf_token %}<button class="botao secundario" type="submit">{% if lote.status == 'cancelado' %}Reabrir preparação{% else %}Cancelar preparação{% endif %}</button></form></div>
+{% else %}<div class="estado-vazio cartao"><h2>Nenhum lote para conferir</h2><p>Envie uma planilha e confirme o mapeamento para iniciar a revisão.</p><a class="botao primario" href="{% url 'nucleo:entradas' %}">Ir para entradas</a></div>{% endif %}
+{% endblock %}
