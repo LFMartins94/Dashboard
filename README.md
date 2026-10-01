@@ -33,6 +33,20 @@ O navegador nunca acessa diretamente o banco. O servidor autentica a contadora, 
 
 Auditoria é uma camada transversal. Triggers e serviços registram alterações; o histórico aparece junto do lote ou lançamento correspondente.
 
+### Tela Trabalho
+
+A tela inicial da nova aplicação funciona como fila operacional da empresa e competência selecionadas. Ela apresenta:
+
+- arquivos recebidos e lotes que ainda precisam de revisão;
+- documentos aguardados;
+- divergências abertas;
+- entregas prontas e concluídas;
+- a próxima ação recomendada por regras determinísticas;
+- checklist recorrente com os estados aguardando, recebido, em conferência, com divergência, revisado e entregue;
+- alternância rápida entre competências abertas.
+
+O início de uma competência e cada mudança de estado usam requisições `POST` com CSRF. A página não cria registros durante um simples carregamento. As consultas de lotes, linhas, conciliações e ocorrências sempre recebem a empresa e a competência validadas da sessão.
+
 ## Importação de planilhas
 
 O importador não é específico da planilha CAP. A primeira versão aceita:
@@ -168,6 +182,7 @@ A nova implementação fica em `web/`. O legado permanece congelado durante a tr
 - [`docs/verificacao_backup_etapa1.md`](docs/verificacao_backup_etapa1.md): evidência da restauração e comparação do backup.
 - [`docs/aceitacao_etapa2.md`](docs/aceitacao_etapa2.md): evidências do esqueleto Django, interface, diagnóstico e testes HTTP.
 - [`docs/aceitacao_etapa3.md`](docs/aceitacao_etapa3.md): controles de autenticação, sessão, contexto e evidências de segurança.
+- [`docs/aceitacao_etapa4.md`](docs/aceitacao_etapa4.md): fila operacional, checklist recorrente, consultas agregadas e aceite da tela Trabalho.
 
 ## Critério de conclusão do primeiro ciclo
 

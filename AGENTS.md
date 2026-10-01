@@ -26,6 +26,9 @@ Para a aplicação Django em `web/`:
 - Login, sessão e limitação de tentativas usam os recursos do Django e tabelas acessíveis somente pelo servidor.
 - Migrações não são executadas no PostgreSQL de produção antes do corte previsto na Etapa 13.
 - As regras baseadas em `rx.State` abaixo valem somente para manutenção do legado Reflex.
+- A fila operacional e o checklist são acessados por `nucleo/servicos/trabalho.py`; templates não consultam o banco.
+- Requisições `GET` da tela Trabalho são somente leitura. Início de competência, mudança de estado e alternância de contexto usam `POST` com CSRF.
+- Os estados operacionais permitidos são `aguardando`, `recebido`, `em_conferencia`, `com_divergencia`, `revisado` e `entregue`.
 
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.

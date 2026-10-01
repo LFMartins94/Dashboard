@@ -17,7 +17,12 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .decoradores import contexto_nao_obrigatorio
-from .formularios import FormularioContexto, FormularioLogin
+from .formularios import (
+    FormularioAlternarCompetencia,
+    FormularioContexto,
+    FormularioEstadoItem,
+    FormularioLogin,
+)
 from .servicos.contexto import (
     carregar_contexto,
     exigir_contexto,
@@ -31,6 +36,13 @@ from .servicos.limite_login import (
     limpar_falhas,
     registrar_falha,
     segundos_para_liberacao,
+)
+from .servicos.trabalho import (
+    PainelTrabalho,
+    atualizar_item_checklist,
+    iniciar_competencia,
+    montar_painel_trabalho,
+    obter_competencia_para_alternar,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,6 +208,17 @@ def selecionar_contexto(requisicao: HttpRequest) -> HttpResponse:
 @require_GET
 def trabalho(requisicao: HttpRequest) -> HttpResponse:
     contexto = exigir_contexto(requisicao)
+    falha_fila = False
+    try:
+        painel = montar_painel_trabalho(contexto)
+    except DatabaseError:
+        logger.exception("Falha ao montar a fila operacional")
+        painel = PainelTrabalho()
+        falha_fila = True
+        messages.error(
+            requisicao,
+            "Não foi possível carregar a fila de trabalho. Tente novamente em instantes.",
+        )
     return render(
         requisicao,
         "nucleo/trabalho.html",
@@ -203,8 +226,75 @@ def trabalho(requisicao: HttpRequest) -> HttpResponse:
             "titulo_pagina": "Trabalho",
             "secao_ativa": "trabalho",
             "contexto": contexto,
+            "painel": painel,
+            "falha_fila": falha_fila,
+            "estados_operacionais": FormularioEstadoItem.base_fields["estado"].choices,
         },
     )
+
+
+@require_POST
+def iniciar_contexto_trabalho(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        iniciar_competencia(contexto, requisicao.user)
+    except ValueError as erro:
+        logger.warning("Competência operacional recusada: %s", erro)
+        messages.error(requisicao, str(erro))
+    except DatabaseError:
+        logger.exception("Falha ao iniciar a competência operacional")
+        messages.error(requisicao, "Não foi possível iniciar a competência.")
+    else:
+        messages.success(requisicao, "Competência iniciada com o checklist recorrente.")
+    return redirect("nucleo:trabalho")
+
+
+@require_POST
+def atualizar_item_trabalho(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    formulario = FormularioEstadoItem(requisicao.POST)
+    if not formulario.is_valid():
+        messages.error(requisicao, "Não foi possível atualizar o item informado.")
+        return redirect("nucleo:trabalho")
+    try:
+        atualizar_item_checklist(
+            contexto,
+            formulario.cleaned_data["item_id"],
+            formulario.cleaned_data["estado"],
+            requisicao.user,
+        )
+    except ValueError as erro:
+        logger.warning("Atualização de checklist recusada: %s", erro)
+        messages.error(requisicao, str(erro))
+    except DatabaseError:
+        logger.exception("Falha ao atualizar item do checklist")
+        messages.error(requisicao, "Não foi possível atualizar o item.")
+    else:
+        messages.success(requisicao, "Estado do item atualizado.")
+    return redirect("nucleo:trabalho")
+
+
+@require_POST
+def alternar_competencia_trabalho(requisicao: HttpRequest) -> HttpResponse:
+    exigir_contexto(requisicao)
+    formulario = FormularioAlternarCompetencia(requisicao.POST)
+    if not formulario.is_valid():
+        messages.error(requisicao, "Selecione uma competência válida.")
+        return redirect("nucleo:trabalho")
+    try:
+        competencia, empresa = obter_competencia_para_alternar(
+            formulario.cleaned_data["competencia_id"]
+        )
+        salvar_contexto(requisicao, empresa, competencia.competencia)
+    except ValueError as erro:
+        logger.warning("Alternância de competência recusada: %s", erro)
+        messages.error(requisicao, str(erro))
+    except DatabaseError:
+        logger.exception("Falha ao alternar competência operacional")
+        messages.error(requisicao, "Não foi possível alternar a competência.")
+    else:
+        messages.success(requisicao, "Contexto de trabalho atualizado.")
+    return redirect("nucleo:trabalho")
 
 
 @require_GET

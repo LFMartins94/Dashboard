@@ -4,11 +4,11 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 3 — autenticação e contexto de trabalho.
+**Etapa concluída:** Etapa 4 — tela Trabalho e fila operacional.
 
-**Etapa em andamento:** nenhuma. A Etapa 4 aguarda autorização do usuário.
+**Etapa em andamento:** nenhuma. A Etapa 5 aguarda autorização do usuário.
 
-**Situação da aplicação nova:** o Django possui layout responsivo, dark mode, login protegido, sessão, logout, limitação de tentativas e seleção persistente de empresa e competência. Todas as rotas operacionais exigem autenticação e contexto. Os módulos de negócio ainda são páginas de espera até suas etapas específicas.
+**Situação da aplicação nova:** o Django possui login protegido, contexto persistente e uma tela Trabalho funcional. A fila reúne checklist, documentos aguardados, lotes pendentes, divergências, entregas, próxima ação e competências abertas. Entradas, Conferência, Entregas e Assistente ainda são páginas de espera até suas etapas específicas.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
@@ -39,7 +39,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 4 — Tela Trabalho.**
+**Etapa 5 — Entrada genérica de arquivos.**
 
 ### Evidências da Etapa 1 concluída
 
@@ -80,17 +80,35 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Evidência detalhada em `docs/aceitacao_etapa3.md`.
 - Nenhuma migração, DDL, criação de usuário ou escrita foi feita no banco de produção.
 
+### Evidências da Etapa 4 concluída
+
+- Tela Trabalho reconstruída como fila operacional da empresa e competência selecionadas.
+- Início explícito e idempotente de competência por `POST` com CSRF.
+- Checklist recorrente para documentos, conferência, divergências e entrega.
+- Seis estados persistidos: aguardando, recebido, em conferência, com divergência, revisado e entregue.
+- Próxima ação definida por regras determinísticas.
+- Métricas alimentadas por lotes, linhas preparadas, conciliações, ocorrências e checklist.
+- Alertas apontam para a área e o identificador do registro responsável.
+- Alternância rápida entre competências abertas com revalidação no servidor.
+- Constraints, índices e proteção RLS preparados para as duas tabelas novas.
+- 35 testes Django, 30 testes legados e consulta somente leitura no PostgreSQL real aprovados.
+- Evidência detalhada em `docs/aceitacao_etapa4.md`.
+- Nenhuma migração, DDL ou escrita foi feita no banco de produção.
+
 ### Ações da próxima etapa
 
-1. Exibir empresas e competências abertas.
-2. Mostrar documentos aguardados, lotes pendentes, divergências e entregas.
-3. Criar estados operacionais: aguardando, recebido, em conferência, com divergência, revisado e entregue.
-4. Permitir abrir diretamente a próxima ação.
-5. Criar checklist recorrente por empresa e competência.
+1. Implementar upload de XLSX, XLS e CSV.
+2. Ler abas, detectar cabeçalho e apresentar prévia.
+3. Mapear data, valor, descrição, tipo, conta e filial.
+4. Preservar colunas originais não mapeadas.
+5. Validar tamanho, extensão, quantidade de linhas e formatos brasileiros.
+6. Detectar reenvio pelo hash antes de criar lote.
+7. Aplicar sugestão local e usar IA somente quando as regras não forem suficientes.
+8. Salvar modelos de mapeamento confirmados.
 
 ### Condição para iniciar
 
-A Etapa 4 ainda não foi autorizada. Não iniciá-la antes da autorização do usuário.
+A Etapa 5 ainda não foi autorizada. Não iniciá-la antes da autorização do usuário.
 
 ## Regra para continuar em outro local
 
@@ -112,8 +130,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 1 | Concluída | Inventário, dump restaurado, comparação aprovada e três fixtures anonimizadas |
 | 2 | Concluída | Django, interface, diagnósticos, logs, ativos e contêiner documentados |
 | 3 | Concluída | Login, sessão, CSRF, limitação de tentativas e contexto validados em 24 testes isolados |
-| 4 | Aguardando autorização | Tela Trabalho e fila operacional |
-| 5 | Pendente | Depende da Etapa 4 |
+| 4 | Concluída | Fila operacional, checklist recorrente, próxima ação e 35 testes Django aprovados |
+| 5 | Aguardando autorização | Entrada genérica de XLSX, XLS e CSV |
 | 6 | Pendente | Depende da Etapa 5 |
 | 7 | Pendente | Depende da Etapa 6 |
 | 8 | Pendente | Depende da Etapa 7 |

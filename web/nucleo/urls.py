@@ -9,6 +9,21 @@ urlpatterns = [
     path("sair/", views.sair, name="logout"),
     path("contexto/", views.selecionar_contexto, name="selecionar_contexto"),
     path("", views.trabalho, name="trabalho"),
+    path(
+        "trabalho/iniciar/",
+        views.iniciar_contexto_trabalho,
+        name="iniciar_trabalho",
+    ),
+    path(
+        "trabalho/item/atualizar/",
+        views.atualizar_item_trabalho,
+        name="atualizar_item_trabalho",
+    ),
+    path(
+        "trabalho/alternar/",
+        views.alternar_competencia_trabalho,
+        name="alternar_competencia_trabalho",
+    ),
     path("entradas/", views.modulo, {"secao": "entradas"}, name="entradas"),
     path(
         "conferencia/",

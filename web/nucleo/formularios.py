@@ -5,6 +5,8 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
+from .models import EstadoOperacional
+
 
 class FormularioLogin(AuthenticationForm):
     error_messages = {
@@ -83,3 +85,15 @@ class FormularioContexto(forms.Form):
         ):
             raise forms.ValidationError("Informe uma competência válida.")
         return competencia
+
+
+class FormularioEstadoItem(forms.Form):
+    item_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+    estado = forms.ChoiceField(
+        label="Estado",
+        choices=EstadoOperacional.choices,
+    )
+
+
+class FormularioAlternarCompetencia(forms.Form):
+    competencia_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())

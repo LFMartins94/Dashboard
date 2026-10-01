@@ -1,52 +1,168 @@
 {% extends "base.html" %}
 
 {% block conteudo %}
-<section class="apresentacao">
+<section class="apresentacao trabalho-apresentacao">
     <div>
-        <p class="sobretitulo">Área de trabalho</p>
-        <h1>Uma rotina contábil mais clara.</h1>
-        <p class="descricao-pagina">A base da nova aplicação está pronta para receber empresas, competências e tarefas nas próximas etapas.</p>
+        <p class="sobretitulo">Fila operacional</p>
+        <h1>O próximo trabalho, sem procurar.</h1>
+        <p class="descricao-pagina">
+            {{ contexto.empresa_nome }} · competência {{ contexto.competencia_exibicao }}.
+            A fila reúne documentos, lotes, divergências e entregas desta rotina.
+        </p>
     </div>
-    <a class="botao-primario" href="{% url 'nucleo:entradas' %}">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        Nova entrada
-    </a>
+    <div class="acoes-apresentacao">
+        {% if painel.competencia %}
+            <span class="estado-competencia estado-{{ painel.competencia.estado }}">
+                {{ painel.competencia.get_estado_display }}
+            </span>
+        {% endif %}
+        <a class="botao-primario" href="{% url 'nucleo:entradas' %}">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Nova entrada
+        </a>
+    </div>
 </section>
 
-<section class="grade-metricas" aria-label="Resumo da competência">
+{% if falha_fila %}
+<section class="estado-vazio-trabalho estado-falha-trabalho">
+    <span class="numero-etapa">!</span>
+    <div>
+        <p class="sobretitulo">Fila indisponível</p>
+        <h2>Não foi possível carregar o trabalho agora.</h2>
+        <p>Atualize a página. Se o problema continuar, informe a referência {{ requisicao_id }}.</p>
+    </div>
+    <a class="botao-secundario" href="{% url 'nucleo:trabalho' %}">Tentar novamente</a>
+</section>
+{% elif not painel.competencia %}
+<section class="estado-vazio-trabalho">
+    <span class="numero-etapa">01</span>
+    <div>
+        <p class="sobretitulo">Primeiro acesso desta competência</p>
+        <h2>Inicie a rotina de {{ contexto.competencia_exibicao }}.</h2>
+        <p>O ContaView criará uma checklist recorrente para acompanhar recebimento, conferência, divergências e entrega.</p>
+    </div>
+    <form method="post" action="{% url 'nucleo:iniciar_trabalho' %}">
+        {% csrf_token %}
+        <button class="botao-primario" type="submit">Iniciar competência</button>
+    </form>
+</section>
+{% else %}
+<section class="grade-metricas grade-metricas-trabalho" aria-label="Resumo da competência">
     <article class="metrica">
         <div class="metrica-cabecalho"><span>Arquivos recebidos</span><span class="metrica-icone">01</span></div>
-        <strong>0</strong><small>Nenhum arquivo processado</small>
+        <strong>{{ painel.metricas.arquivos_recebidos }}</strong>
+        <small>Arquivos preservados nesta competência</small>
     </article>
     <article class="metrica">
-        <div class="metrica-cabecalho"><span>Pendências</span><span class="metrica-icone">02</span></div>
-        <strong>0</strong><small>Nenhuma decisão aguardando</small>
+        <div class="metrica-cabecalho"><span>Documentos aguardados</span><span class="metrica-icone">02</span></div>
+        <strong>{{ painel.metricas.documentos_aguardando }}</strong>
+        <small>Itens ainda não recebidos</small>
     </article>
     <article class="metrica">
-        <div class="metrica-cabecalho"><span>Entregas prontas</span><span class="metrica-icone">03</span></div>
-        <strong>0</strong><small>Aguardando o primeiro ciclo</small>
+        <div class="metrica-cabecalho"><span>Pendências</span><span class="metrica-icone">03</span></div>
+        <strong>{{ painel.metricas.total_pendencias }}</strong>
+        <small>{{ painel.metricas.lotes_pendentes }} lote(s) e {{ painel.metricas.divergencias }} divergência(s)</small>
+    </article>
+    <article class="metrica">
+        <div class="metrica-cabecalho"><span>Entregas prontas</span><span class="metrica-icone">04</span></div>
+        <strong>{{ painel.metricas.entregas_prontas }}</strong>
+        <small>{{ painel.metricas.entregas_concluidas }} entrega(s) concluída(s)</small>
     </article>
 </section>
 
-<div class="grade-conteudo">
-    <section class="painel">
-        <header class="painel-cabecalho">
-            <div><p class="titulo-secao">Próximos passos</p><p class="subtitulo-secao">A sequência segura para iniciar o trabalho</p></div>
-        </header>
-        <ol class="lista-passos">
-            <li><span>1</span><div><strong>Configure o acesso</strong><small>A autenticação e o contexto de empresa entram na próxima etapa.</small></div></li>
-            <li><span>2</span><div><strong>Envie os arquivos</strong><small>Planilhas de formatos diferentes serão preservadas e preparadas.</small></div></li>
-            <li><span>3</span><div><strong>Revise somente exceções</strong><small>As decisões ambíguas permanecem sob controle da contadora.</small></div></li>
-        </ol>
-    </section>
-
-    <aside class="painel painel-destaque">
-        <p class="sobretitulo">Ciclo de trabalho</p>
-        <h2>Do arquivo à entrega, com rastreabilidade.</h2>
-        <p>Entradas alimentam a conferência. Somente lotes aprovados produzem lançamentos e relatórios.</p>
-        <div class="fluxo-compacto" aria-label="Fluxo da aplicação">
-            <span>Entrada</span><i></i><span>Conferência</span><i></i><span>Entrega</span>
+{% if painel.proxima_acao %}
+<section class="proxima-acao">
+    <div class="proxima-acao-marca"><span></span>Próxima ação</div>
+    <div class="proxima-acao-conteudo">
+        <div>
+            <h2>{{ painel.proxima_acao.titulo }}</h2>
+            <p>{{ painel.proxima_acao.descricao }}</p>
         </div>
+        <a class="botao-acao" href="{{ painel.proxima_acao.url }}">
+            Abrir trabalho
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></svg>
+        </a>
+    </div>
+</section>
+{% endif %}
+
+<div class="grade-trabalho">
+    <div class="coluna-trabalho">
+        <section class="painel">
+            <header class="painel-cabecalho painel-cabecalho-linha">
+                <div><p class="titulo-secao">Checklist da competência</p><p class="subtitulo-secao">Atualize o estado conforme o trabalho avança</p></div>
+                <span class="contador-painel">{{ painel.itens|length }} itens</span>
+            </header>
+            <div class="lista-checklist">
+                {% for item in painel.itens %}
+                <article class="item-checklist">
+                    <span class="marcador-checklist estado-{{ item.estado }}" aria-hidden="true"></span>
+                    <div class="item-checklist-texto">
+                        <div><span class="rotulo-categoria">{{ item.get_categoria_display }}</span><span class="estado-texto">{{ item.get_estado_display }}</span></div>
+                        <strong>{{ item.titulo }}</strong>
+                    </div>
+                    <a class="link-item" href="{% url item.rota_destino %}" aria-label="Abrir {{ item.titulo }}">Abrir</a>
+                    <form class="formulario-estado" method="post" action="{% url 'nucleo:atualizar_item_trabalho' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <label class="sr-only" for="estado-item-{{ item.id }}">Estado de {{ item.titulo }}</label>
+                        <select id="estado-item-{{ item.id }}" name="estado" onchange="this.form.submit()">
+                            {% for valor, rotulo in estados_operacionais %}
+                                <option value="{{ valor }}"{% if item.estado == valor %} selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                        <noscript><button class="botao-secundario" type="submit">Salvar</button></noscript>
+                    </form>
+                </article>
+                {% empty %}
+                <div class="vazio-painel">Nenhum item recorrente foi criado.</div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="painel">
+            <header class="painel-cabecalho painel-cabecalho-linha">
+                <div><p class="titulo-secao">Pendências que exigem atenção</p><p class="subtitulo-secao">Cada alerta abre o registro responsável</p></div>
+                <span class="contador-painel">{{ painel.alertas|length }}</span>
+            </header>
+            <div class="lista-alertas-trabalho">
+                {% for alerta in painel.alertas %}
+                <a class="alerta-trabalho alerta-{{ alerta.severidade }}" href="{{ alerta.url }}">
+                    <span class="sinal-alerta" aria-hidden="true"></span>
+                    <span><small>{{ alerta.rotulo }}</small><strong>{{ alerta.titulo }}</strong><em>{{ alerta.descricao }}</em></span>
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                </a>
+                {% empty %}
+                <div class="vazio-painel">
+                    <strong>Nenhuma exceção aberta.</strong>
+                    <span>Novos lotes e divergências aparecerão aqui.</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <aside class="painel competencias-abertas">
+        <header class="painel-cabecalho">
+            <p class="titulo-secao">Competências abertas</p>
+            <p class="subtitulo-secao">Alterne o foco sem refazer os filtros</p>
+        </header>
+        <div class="lista-competencias">
+            {% for competencia in painel.competencias_abertas %}
+            <form method="post" action="{% url 'nucleo:alternar_competencia_trabalho' %}">
+                {% csrf_token %}
+                <input type="hidden" name="competencia_id" value="{{ competencia.id }}">
+                <button class="competencia-aberta{% if competencia.selecionada %} selecionada{% endif %}" type="submit"{% if competencia.selecionada %} disabled{% endif %}>
+                    <span><strong>{{ competencia.empresa_nome }}</strong><small>{{ competencia.estado_exibicao }}</small></span>
+                    <em>{{ competencia.competencia_exibicao }}</em>
+                </button>
+            </form>
+            {% empty %}
+            <div class="vazio-painel compacto">Esta é a primeira competência aberta.</div>
+            {% endfor %}
+        </div>
+        <a class="link-contexto" href="{% url 'nucleo:selecionar_contexto' %}">Selecionar outra empresa ou competência</a>
     </aside>
 </div>
+{% endif %}
 {% endblock %}

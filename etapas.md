@@ -141,7 +141,7 @@ Substituir a autenticação por variáveis soltas por sessão segura do Django.
 
 ## Etapa 4 — Tela Trabalho
 
-**Status:** aguardando.
+**Status:** concluída em 01/10/2026.
 
 ### Objetivo
 
