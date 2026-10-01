@@ -217,3 +217,16 @@ class FormularioEdicaoEmLote(forms.Form):
 
 class FormularioLote(forms.Form):
     lote_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+
+
+class FormularioMensagemAssistente(forms.Form):
+    conversa_id = forms.IntegerField(min_value=1, required=False, widget=forms.HiddenInput())
+    conteudo = forms.CharField(
+        label="Mensagem",
+        max_length=4000,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Escreva sua dúvida contábil..."}),
+    )
+
+
+class FormularioConversaAssistente(forms.Form):
+    conversa_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())

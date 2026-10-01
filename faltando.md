@@ -160,3 +160,7 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 ## Atualização da Etapa 6
 
 Etapa 6 concluída. A tela de Conferência agora carrega o lote da empresa e competência selecionadas, permite editar linhas individualmente ou em lote, apresenta totais, bloqueia aprovação com pendências, solicita confirmação para substituir competência existente e permite cancelar ou reabrir preparação. Foram aprovados 48 testes Django, 30 testes legados, verificação de sintaxe e compilação Tailwind. A próxima etapa é a Etapa 7, Assistente controlado, aguardando autorização.
+
+## Atualização da Etapa 7
+
+Etapa 7 concluída. O Assistente agora possui conversas persistidas, exclusão limitada à sessão autenticada, histórico controlado, bloqueio de consultas fora da empresa e competência atuais, remoção de identificadores e registros nominais antes do envio à IA e tratamento de indisponibilidade. Foram adicionados 2 testes específicos. A próxima etapa é a Etapa 8, Conciliação, aguardando autorização.

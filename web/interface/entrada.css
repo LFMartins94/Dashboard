@@ -480,3 +480,20 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 .formulario-linha select, .formulario-linha input { min-height:40px; }
 .acoes-rodape { display:flex; gap:12px; margin-top:16px; }
 @media (max-width: 900px) { .grade-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.layout-assistente { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; min-height:560px; }
+.lista-conversas { padding:14px; }
+.item-conversa { display:flex; align-items:center; gap:8px; border-radius:9px; padding:9px; }
+.item-conversa.ativo, .item-conversa:hover { background:var(--linha); }
+.item-conversa a { color:var(--texto); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.botao-excluir { border:0; background:transparent; color:var(--texto-secundario); cursor:pointer; font-size:.72rem; }
+.painel-chat { display:flex; flex-direction:column; min-height:560px; }
+.mensagens-chat { flex:1; overflow:auto; display:grid; align-content:start; gap:12px; padding:16px 0; }
+.mensagem-chat { max-width:80%; border:1px solid var(--linha); border-radius:12px; padding:12px 14px; }
+.mensagem-chat.user { justify-self:end; background:var(--linha); }
+.mensagem-chat.assistant { justify-self:start; background:var(--cartao); }
+.rotulo-mensagem { display:block; font-size:.74rem; color:var(--texto-secundario); margin-bottom:5px; font-weight:600; }
+.mensagem-chat p { margin:0; white-space:pre-wrap; }
+.formulario-chat { border-top:1px solid var(--linha); padding-top:14px; }
+.formulario-chat textarea { width:100%; resize:vertical; }
+.rodape-chat { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:8px; }
+@media (max-width:900px) { .layout-assistente { grid-template-columns:1fr; } .lista-conversas { min-height:auto; } .mensagem-chat { max-width:95%; } }

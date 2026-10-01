@@ -27,6 +27,21 @@ def _ocultar_documentos(texto: str) -> str:
     return texto
 
 
+def _sanitizar_resultado_ferramenta(resultado):
+    """Retira identificadores e registros nominais antes de voltar à IA."""
+    if not isinstance(resultado, dict):
+        return resultado
+    seguro = {}
+    for chave, valor in resultado.items():
+        if chave.lower() in {"cpf", "cnpj", "nome", "razao_social"}:
+            continue
+        if chave == "lancamentos" and isinstance(valor, list):
+            seguro["quantidade_lancamentos"] = len(valor)
+            continue
+        seguro[chave] = _sanitizar_resultado_ferramenta(valor) if isinstance(valor, dict) else valor
+    return seguro
+
+
 _SISTEMA = (
     "Você é uma assistente contábil especializada chamada ContaView. "
     "Responda sempre em português brasileiro. "
@@ -38,10 +53,20 @@ _SISTEMA = (
 )
 
 
-def perguntar_ao_assistente(mensagens: list[dict]) -> str:
+def perguntar_ao_assistente(
+    mensagens: list[dict], empresa_permitida: str | None = None,
+    periodo_permitido: str | None = None,
+) -> str:
     from contaview.logic.assistente_ferramentas import TOOL_SCHEMAS, MAP_FERRAMENTAS
 
-    historico = [{"role": "system", "content": _SISTEMA}] + [
+    instrucao = _SISTEMA
+    if empresa_permitida or periodo_permitido:
+        instrucao += (
+            f" Consulte somente a empresa '{empresa_permitida}' e a competência "
+            f"'{periodo_permitido}'. Se a pergunta pedir outro contexto, informe que "
+            "é necessário trocar o contexto de trabalho primeiro."
+        )
+    historico = [{"role": "system", "content": instrucao}] + [
         {**mensagem, "content": _ocultar_documentos(mensagem.get("content", ""))}
         for mensagem in mensagens
     ]
@@ -71,7 +96,15 @@ def perguntar_ao_assistente(mensagens: list[dict]) -> str:
                 args = {}
 
             funcao = MAP_FERRAMENTAS.get(nome)
-            if funcao:
+            empresa_pedida = args.get("empresa")
+            periodo_pedido = args.get("periodo")
+            contexto_bloqueado = (
+                (empresa_permitida and empresa_pedida and empresa_pedida.strip().casefold() != empresa_permitida.strip().casefold())
+                or (periodo_permitido and periodo_pedido and periodo_pedido not in {periodo_permitido, f"{periodo_permitido[5:]}/{periodo_permitido[:4]}"})
+            )
+            if contexto_bloqueado:
+                resultado = {"erro": "Consulta fora do contexto de trabalho selecionado."}
+            elif funcao:
                 try:
                     resultado = funcao(**args)
                 except Exception as exc:
@@ -82,7 +115,7 @@ def perguntar_ao_assistente(mensagens: list[dict]) -> str:
             historico.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": json.dumps(resultado, ensure_ascii=False),
+                "content": json.dumps(_sanitizar_resultado_ferramenta(resultado), ensure_ascii=False),
             })
 
         resposta_final = client.chat.completions.create(

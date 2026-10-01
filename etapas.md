@@ -219,28 +219,29 @@ Fechar a ponte entre preparação e lançamentos finais.
 
 Implementação concluída em `docs/aceitacao_etapa6.md`. A aprovação mantém a regra de um único período por lote; arquivos com vários meses precisam ser separados.
 
-## Etapa 7 — Lançamentos manuais e histórico
+## Etapa 7 — Assistente controlado
 
-**Status:** aguardando.
+**Status:** concluída.
 
 ### Objetivo
 
-Permitir que a contadora corrija o que não veio das planilhas.
+Permitir consultas em linguagem natural sem expor dados nominais nem permitir alterações contábeis.
 
 ### Tarefas
 
-1. Criar lançamento manual.
-2. Editar lançamento aprovado.
-3. Excluir com confirmação e justificativa.
-4. Registrar antes e depois no histórico.
-5. Exibir origem do lançamento: arquivo, manual ou ajuste.
-6. Criar filtros e busca por data, conta, valor e descrição.
+1. Persistir conversas e mensagens por sessão autenticada.
+2. Restringir consultas à empresa e competência do contexto atual.
+3. Remover CPFs, CNPJs e registros nominais antes do envio à IA.
+4. Permitir perguntas gerais e consultas determinísticas de saldo, conciliação e auditoria.
+5. Tratar chave ausente, indisponibilidade e mensagens inválidas sem quebrar a rotina.
 
 ### Aceite
 
-- Um lançamento manual aparece em Painel, Conciliação e Relatórios.
-- Toda alteração pode ser auditada.
-- A interface nunca permite alterar a empresa do registro sem validação.
+- Uma conversa pode ser criada, retomada e excluída na mesma sessão.
+- Uma pergunta fora do contexto selecionado é bloqueada.
+- O assistente não grava lançamentos nem recebe registros nominais brutos.
+
+Os lançamentos manuais e o histórico permanecem planejados para uma etapa posterior específica.
 
 ## Etapa 8 — Conciliação e exceções
 

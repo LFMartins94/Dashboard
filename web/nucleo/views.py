@@ -29,6 +29,8 @@ from .formularios import (
     FormularioEditarLinhaConferencia,
     FormularioEdicaoEmLote,
     FormularioLote,
+    FormularioMensagemAssistente,
+    FormularioConversaAssistente,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -62,6 +64,7 @@ from .servicos.trabalho import (
     obter_competencia_para_alternar,
 )
 from .servicos import conferencia as servico_conferencia
+from .servicos import assistente as servico_assistente
 
 logger = logging.getLogger(__name__)
 
@@ -614,6 +617,54 @@ def modulo(requisicao: HttpRequest, secao: str) -> HttpResponse:
     contexto = exigir_contexto(requisicao)
     dados = SECOES[secao]
     return render(requisicao, "nucleo/modulo.html", {"titulo_pagina": dados["titulo"], "secao_ativa": secao, "contexto": contexto, **dados})
+
+
+@require_http_methods(["GET", "POST"])
+def assistente(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    conversa_bruta = requisicao.POST.get("conversa_id") or requisicao.GET.get("conversa")
+    try:
+        conversa_id = int(conversa_bruta) if conversa_bruta else None
+    except (TypeError, ValueError):
+        conversa_id = None
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao", "mensagem")
+            if acao == "nova":
+                conversa_id = servico_assistente.nova_conversa(requisicao)
+            elif acao == "excluir":
+                formulario = FormularioConversaAssistente(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_assistente.ErroAssistente("Conversa inválida.")
+                servico_assistente.excluir(requisicao, formulario.cleaned_data["conversa_id"])
+                conversa_id = None
+            else:
+                formulario = FormularioMensagemAssistente(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_assistente.ErroAssistente("Revise a mensagem enviada.")
+                conversa_id = servico_assistente.enviar(
+                    requisicao, contexto,
+                    formulario.cleaned_data.get("conversa_id") or None,
+                    formulario.cleaned_data["conteudo"],
+                )
+    except servico_assistente.ErroAssistente as erro:
+        messages.error(requisicao, str(erro))
+    except DatabaseError:
+        logger.exception("Falha de banco no assistente")
+        messages.error(requisicao, "Não foi possível carregar o assistente agora.")
+    try:
+        conversas = servico_assistente.listar(requisicao)
+        if conversa_id is None and conversas:
+            conversa_id = int(conversas[0]["id"])
+        mensagens = servico_assistente.obter_mensagens(requisicao, conversa_id) if conversa_id else []
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Conversa indisponível: %s", erro)
+        conversas, mensagens, conversa_id = servico_assistente.listar(requisicao), [], None
+    return render(requisicao, "nucleo/assistente.html", {
+        "titulo_pagina": "Assistente", "secao_ativa": "assistente", "contexto": contexto,
+        "conversas": conversas, "mensagens": mensagens, "conversa_id": conversa_id,
+        "formulario": FormularioMensagemAssistente(initial={"conversa_id": conversa_id}),
+    })
 
 
 @login_not_required

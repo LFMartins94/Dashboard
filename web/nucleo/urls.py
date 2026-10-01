@@ -48,8 +48,7 @@ urlpatterns = [
     path("entregas/", views.modulo, {"secao": "entregas"}, name="entregas"),
     path(
         "assistente/",
-        views.modulo,
-        {"secao": "assistente"},
+        views.assistente,
         name="assistente",
     ),
     path("saude/", views.saude, name="saude"),
