@@ -230,3 +230,19 @@ class FormularioMensagemAssistente(forms.Form):
 
 class FormularioConversaAssistente(forms.Form):
     conversa_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+
+
+class FormularioExecutarConciliacao(forms.Form):
+    lote_extrato_id = forms.IntegerField(min_value=1)
+    lote_referencia_id = forms.IntegerField(min_value=0)
+
+
+class FormularioDecisaoConciliacao(FormularioExecutarConciliacao):
+    linha_extrato_id = forms.IntegerField(min_value=1)
+    linha_referencia_id = forms.IntegerField(min_value=1)
+    decisao = forms.ChoiceField(choices=(
+        ("confirmada", "Confirmar"),
+        ("rejeitada", "Rejeitar"),
+        ("manual", "Ajuste manual"),
+    ))
+    justificativa = forms.CharField(max_length=500, required=False)

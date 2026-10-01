@@ -903,14 +903,21 @@ def aprovar_lote_preparacao(
 
 
 def inserir_conciliacao(empresa_id: int, periodo: str, total_pares: int, pares_ok: int, pares_com_erro: int) -> int:
-    sql = text("""
+    inserir_sql = text("""
         INSERT INTO conciliacoes (empresa_id, periodo, total_pares, pares_ok, pares_com_erro, status)
         VALUES (:empresa_id, :periodo, :total_pares, :pares_ok, :pares_com_erro, 'concluido')
         RETURNING id
     """)
     try:
         with _get_engine().begin() as conn:
-            new_id = conn.execute(sql, {
+            _definir_usuario_auditoria(conn)
+            if conn.dialect.name == "postgresql":
+                conn.execute(text("LOCK TABLE conciliacoes IN SHARE ROW EXCLUSIVE MODE"))
+            conn.execute(text("""
+                DELETE FROM conciliacoes
+                WHERE empresa_id = :empresa_id AND periodo = :periodo
+            """), {"empresa_id": empresa_id, "periodo": periodo})
+            new_id = conn.execute(inserir_sql, {
                 "empresa_id": empresa_id, "periodo": periodo,
                 "total_pares": total_pares, "pares_ok": pares_ok,
                 "pares_com_erro": pares_com_erro,

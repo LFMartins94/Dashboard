@@ -164,3 +164,7 @@ Etapa 6 concluída. A tela de Conferência agora carrega o lote da empresa e com
 ## Atualização da Etapa 7
 
 Etapa 7 concluída. O Assistente agora possui conversas persistidas, exclusão limitada à sessão autenticada, histórico controlado, bloqueio de consultas fora da empresa e competência atuais, remoção de identificadores e registros nominais antes do envio à IA e tratamento de indisponibilidade. Foram adicionados 2 testes específicos. A próxima etapa é a Etapa 8, Conciliação, aguardando autorização.
+
+## Atualização da Etapa 8
+
+Etapa 8 concluída. A Conciliação compara um extrato aos lançamentos aprovados ou a outro lote da empresa e competência atuais com regras determinísticas, mostra pares exatos, candidatos, divergências e linhas sem correspondência, e registra decisões humanas com justificativa. O resumo da competência é substituído ao reexecutar, sem duplicação. A migração `0005_revisoes_conciliacao.py` está pronta, com RLS e revogação de acesso público, mas não foi aplicada em produção. Foram aprovados 53 testes Django e 31 testes legados. A próxima etapa é a Etapa 9, Auditoria operacional, aguardando autorização.

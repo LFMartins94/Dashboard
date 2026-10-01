@@ -245,7 +245,7 @@ Os lançamentos manuais e o histórico permanecem planejados para uma etapa post
 
 ## Etapa 8 — Conciliação e exceções
 
-**Status:** aguardando.
+**Status:** concluída.
 
 ### Objetivo
 
@@ -267,6 +267,8 @@ Automatizar correspondências seguras e enviar ambiguidades para decisão humana
 - Uma diferença de valor não vira par confirmado.
 - Dois candidatos iguais ficam para revisão.
 - A segunda execução não duplica ocorrências.
+
+Implementação concluída em `docs/aceitacao_etapa8.md`. A migração de revisões permanece preparada localmente e será aplicada no Supabase apenas na Etapa 13.
 
 ## Etapa 9 — Auditoria operacional
 

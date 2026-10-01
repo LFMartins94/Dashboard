@@ -274,3 +274,63 @@ class ModeloMapeamentoEntrada(models.Model):
                 name="idx_mod_map_estrutura",
             ),
         ]
+
+
+class DecisaoConciliacao(models.TextChoices):
+    CONFIRMADA = "confirmada", "Confirmada"
+    REJEITADA = "rejeitada", "Rejeitada"
+    MANUAL = "manual", "Ajuste manual"
+
+
+class RevisaoConciliacao(models.Model):
+    """Decisão humana para um candidato de conciliação entre dois lotes."""
+
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    lote_extrato_id = models.BigIntegerField()
+    lote_referencia_id = models.BigIntegerField()
+    linha_extrato_id = models.BigIntegerField()
+    linha_referencia_id = models.BigIntegerField()
+    decisao = models.CharField(max_length=15, choices=DecisaoConciliacao.choices)
+    justificativa = models.CharField(max_length=500, blank=True)
+    decidido_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="revisoes_conciliacao",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_revisoes_conciliacao"
+        verbose_name = "revisão de conciliação"
+        verbose_name_plural = "revisões de conciliação"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "empresa_id", "competencia", "lote_extrato_id",
+                    "lote_referencia_id", "linha_extrato_id", "linha_referencia_id",
+                ],
+                name="uq_rev_conc_linhas",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_rev_conc_empresa_pos",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"
+                ),
+                name="ck_rev_conc_periodo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(decisao__in=DecisaoConciliacao.values),
+                name="ck_rev_conc_decisao",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "competencia", "lote_extrato_id", "lote_referencia_id"],
+                name="idx_rev_conc_contexto",
+            ),
+        ]

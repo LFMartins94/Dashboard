@@ -31,6 +31,8 @@ from .formularios import (
     FormularioLote,
     FormularioMensagemAssistente,
     FormularioConversaAssistente,
+    FormularioExecutarConciliacao,
+    FormularioDecisaoConciliacao,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -65,6 +67,7 @@ from .servicos.trabalho import (
 )
 from .servicos import conferencia as servico_conferencia
 from .servicos import assistente as servico_assistente
+from .servicos import conciliacao as servico_conciliacao
 
 logger = logging.getLogger(__name__)
 
@@ -610,6 +613,42 @@ def conferencia(requisicao: HttpRequest) -> HttpResponse:
             **dados,
         },
     )
+
+
+@require_http_methods(["GET", "POST"])
+def conciliacao(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    dados = servico_conciliacao.contexto_inicial(contexto)
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao", "executar")
+            formulario = (
+                FormularioDecisaoConciliacao(requisicao.POST)
+                if acao == "decidir" else FormularioExecutarConciliacao(requisicao.POST)
+            )
+            if not formulario.is_valid():
+                raise servico_conciliacao.ErroConciliacao("Revise os lotes e a decisão informados.")
+            campos = formulario.cleaned_data
+            if acao == "decidir":
+                dados = servico_conciliacao.decidir(
+                    contexto, requisicao.user,
+                    campos["lote_extrato_id"], campos["lote_referencia_id"],
+                    campos["linha_extrato_id"], campos["linha_referencia_id"],
+                    campos["decisao"], campos["justificativa"],
+                )
+                messages.success(requisicao, "Decisão de conciliação registrada.")
+            else:
+                dados = servico_conciliacao.executar(
+                    contexto, campos["lote_extrato_id"], campos["lote_referencia_id"]
+                )
+                messages.success(requisicao, "Conciliação executada com regras determinísticas.")
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de conciliação recusada: %s", erro)
+        messages.error(requisicao, str(erro) or "Não foi possível executar a conciliação.")
+    return render(requisicao, "nucleo/conciliacao.html", {
+        "titulo_pagina": "Conciliação", "secao_ativa": "conciliacao",
+        "contexto": contexto, **dados,
+    })
 
 
 @require_GET

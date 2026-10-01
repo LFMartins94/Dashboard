@@ -32,7 +32,7 @@ Para a aplicação Django em `web/`:
 - O fluxo Django de entrada passa por `nucleo/servicos/entradas.py`, depois por `contaview/logic/importacao.py`; views e templates nunca chamam `logic/database.py` diretamente.
 - Arquivos temporários só podem ser lidos quando usuário, empresa e competência correspondem ao contexto validado. A cópia temporária deve ser apagada depois que o lote final preservar o original.
 - Sugestões de IA para mapeamento recebem somente nomes de colunas higienizados. Conteúdo de células não entra no prompt.
-- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; a migração continua pendente para o corte da Etapa 13.
+- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; as revisões de conciliação ficam em `django_revisoes_conciliacao`. As migrações continuam pendentes para o corte da Etapa 13.
 
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.
