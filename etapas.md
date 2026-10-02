@@ -321,7 +321,7 @@ Gerar saídas úteis e verificáveis, independentes do sistema oficial.
 
 ## Etapa 11 — Automações recorrentes
 
-**Status:** aguardando.
+**Status:** concluída em ambiente local; migração pendente para o corte da Etapa 13.
 
 ### Objetivo
 

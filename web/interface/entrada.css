@@ -526,3 +526,25 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 @media (max-width:1080px) { .formulario-entrega,.formulario-dre { grid-template-columns:repeat(2,minmax(0,1fr)); } .formulario-entrega button,.formulario-dre button { grid-column:span 2; } }
 @media (max-width:900px) { .grade-entregas,.grade-entregas-secundaria { grid-template-columns:1fr; } .formulario-perfil { grid-template-columns:1fr; } }
 @media (max-width:560px) { .formulario-entrega,.formulario-dre { grid-template-columns:1fr; } .formulario-entrega button,.formulario-dre button { grid-column:auto; } }
+.grade-automacoes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin-bottom:20px; }
+.formulario-automacao { display:grid; grid-template-columns:minmax(180px,1fr) minmax(130px,.65fr) minmax(110px,.45fr) auto auto; gap:12px; align-items:end; padding:20px; }
+.formulario-origem { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:12px; align-items:end; padding:20px; }
+.campo-opcao { min-height:39px; grid-template-columns:auto 1fr; align-items:center; gap:7px; padding-bottom:9px; }
+.campo-opcao input { width:auto; min-height:auto; }
+.lista-lembretes,.lista-tarefas { display:grid; }
+.lembrete,.tarefa-automacao { border-top:1px solid var(--linha); align-items:center; gap:12px; padding:14px 20px; display:flex; }
+.lembrete:first-child,.tarefa-automacao:first-child { border-top:0; }
+.lembrete>div,.tarefa-automacao>div { min-width:0; flex:1; display:grid; gap:3px; }
+.lembrete strong,.tarefa-automacao strong { font-size:11px; }
+.lembrete small,.tarefa-automacao small { color:var(--muted); font-size:9px; overflow-wrap:anywhere; }
+.lembrete em,.tarefa-automacao>span { color:var(--tinta-suave); background:var(--papel); border-radius:999px; padding:5px 7px; font-size:9px; font-style:normal; font-weight:750; white-space:nowrap; }
+.lembrete.atrasado .sinal-alerta { background:var(--erro); }
+.lembrete.atrasado em,.tarefa-automacao.estado-falha>span { color:var(--erro); background:var(--acento-suave); }
+.tarefa-automacao.estado-concluida>span { color:var(--sucesso); background:var(--sucesso-suave); }
+.tarefa-automacao form { flex:none; }
+.painel-informativo-automacao { color:#f4f6f3; background:var(--lateral); padding:24px; }
+.painel-informativo-automacao h2 { letter-spacing:-.04em; margin:0; font-size:21px; }
+.painel-informativo-automacao p:not(.sobretitulo) { max-width:760px; color:var(--lateral-suave); margin:9px 0 0; font-size:11px; line-height:1.6; }
+@media (max-width:1120px) { .formulario-automacao,.formulario-origem { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:800px) { .grade-automacoes { grid-template-columns:1fr; } }
+@media (max-width:560px) { .formulario-automacao,.formulario-origem { grid-template-columns:1fr; } .lembrete,.tarefa-automacao { align-items:flex-start; flex-wrap:wrap; } }

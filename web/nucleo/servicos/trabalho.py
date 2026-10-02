@@ -13,6 +13,8 @@ from nucleo.models import (
     CompetenciaTrabalho,
     EstadoOperacional,
     ItemChecklistTrabalho,
+    TarefaAutomacao,
+    TipoTarefaAutomacao,
 )
 from nucleo.servicos.contexto import (
     ContextoTrabalho,
@@ -118,6 +120,17 @@ def iniciar_competencia(contexto: ContextoTrabalho, usuario) -> CompetenciaTraba
                     "atualizado_por": usuario,
                 },
             )
+        from nucleo.servicos.automacoes import (
+            aplicar_modelos_documento,
+            verificar_pendencias,
+        )
+        aplicar_modelos_documento(contexto, competencia, usuario, validar_contexto=False)
+        if not TarefaAutomacao.objects.filter(
+            empresa_id=contexto.empresa_id,
+            competencia=contexto.competencia,
+            tipo=TipoTarefaAutomacao.VERIFICAR_PENDENCIAS,
+        ).exists():
+            verificar_pendencias(contexto, usuario, validar_contexto=False)
     return competencia
 
 

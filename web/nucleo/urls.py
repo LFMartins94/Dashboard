@@ -48,6 +48,7 @@ urlpatterns = [
     path("conciliacao/", views.conciliacao, name="conciliacao"),
     path("auditoria/", views.auditoria, name="auditoria"),
     path("entregas/", views.entregas, name="entregas"),
+    path("automacoes/", views.automacoes, name="automacoes"),
     path(
         "assistente/",
         views.assistente,

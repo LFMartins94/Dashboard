@@ -37,6 +37,9 @@ from .formularios import (
     FormularioClassificacaoDre,
     FormularioGerarRelatorio,
     FormularioPerfilExportacao,
+    FormularioModeloDocumentoEsperado,
+    FormularioPerfilOrigemEntrada,
+    FormularioTarefaAutomacao,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -74,6 +77,7 @@ from .servicos import assistente as servico_assistente
 from .servicos import conciliacao as servico_conciliacao
 from .servicos import auditoria as servico_auditoria
 from .servicos import relatorios as servico_relatorios
+from .servicos import automacoes as servico_automacoes
 
 logger = logging.getLogger(__name__)
 
@@ -735,6 +739,52 @@ def entregas(requisicao: HttpRequest) -> HttpResponse:
         "formulario_perfil": FormularioPerfilExportacao(),
         "formulario_dre": FormularioClassificacaoDre(),
         "formulario_gerar": FormularioGerarRelatorio(),
+        **dados,
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def automacoes(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao")
+            if acao == "criar_documento":
+                formulario = FormularioModeloDocumentoEsperado(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_automacoes.ErroAutomacao("Revise o modelo de documento informado.")
+                servico_automacoes.criar_modelo_documento(contexto, **formulario.cleaned_data)
+                messages.success(requisicao, "Modelo de documento salvo para as próximas competências.")
+            elif acao == "criar_origem":
+                formulario = FormularioPerfilOrigemEntrada(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_automacoes.ErroAutomacao("Revise o perfil de origem informado.")
+                servico_automacoes.criar_perfil_origem(contexto, **formulario.cleaned_data)
+                messages.success(requisicao, "Perfil de origem salvo para esta empresa.")
+            elif acao == "verificar":
+                servico_automacoes.verificar_pendencias(contexto, requisicao.user)
+                messages.success(requisicao, "Lembretes internos atualizados.")
+            elif acao == "reexecutar":
+                formulario = FormularioTarefaAutomacao(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_automacoes.ErroAutomacao("A tarefa informada é inválida.")
+                tarefa = servico_automacoes.reexecutar_tarefa(
+                    contexto, formulario.cleaned_data["tarefa_id"], requisicao.user
+                )
+                if tarefa.estado == "concluida":
+                    messages.success(requisicao, "Tarefa reexecutada com sucesso.")
+                else:
+                    messages.error(requisicao, "A tarefa continua com falha. Revise a mensagem exibida.")
+            else:
+                raise servico_automacoes.ErroAutomacao("Ação de automação inválida.")
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de automação recusada: %s", erro)
+        messages.error(requisicao, str(erro) or "Não foi possível concluir a automação.")
+    dados = servico_automacoes.carregar(contexto)
+    return render(requisicao, "nucleo/automacoes.html", {
+        "titulo_pagina": "Automações", "secao_ativa": "automacoes", "contexto": contexto,
+        "formulario_documento": FormularioModeloDocumentoEsperado(),
+        "formulario_origem": FormularioPerfilOrigemEntrada(),
         **dados,
     })
 

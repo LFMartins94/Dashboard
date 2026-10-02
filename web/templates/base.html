@@ -55,6 +55,10 @@
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
                     <span>Entregas</span>
                 </a>
+                <a class="item-navegacao{% if secao_ativa == 'automacoes' %} ativo{% endif %}" href="{% url 'nucleo:automacoes' %}"{% if secao_ativa == 'automacoes' %} aria-current="page"{% endif %}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span>Automações</span>
+                </a>
                 <a class="item-navegacao{% if secao_ativa == 'assistente' %} ativo{% endif %}" href="{% url 'nucleo:assistente' %}"{% if secao_ativa == 'assistente' %} aria-current="page"{% endif %}>
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 18.5V8a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4H8.5L5 20.5v-2Z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>
                     <span>Assistente</span>

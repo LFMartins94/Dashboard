@@ -25,6 +25,7 @@ from ..models import (
     ModeloMapeamentoEntrada,
 )
 from .contexto import ContextoTrabalho, obter_empresa_ativa
+from .automacoes import identificar_perfil_origem, registrar_processamento_concluido
 
 EXTENSOES_PERMITIDAS = {"xlsx", "xls", "csv"}
 LIMITE_BYTES = 20 * 1024 * 1024
@@ -182,18 +183,23 @@ def receber_arquivo(arquivo, contexto: ContextoTrabalho, usuario) -> ArquivoEntr
     if not resultado.get("sucesso"):
         raise ErroEntrada(f"Arquivo {nome}: {resultado.get('erro', 'falha na leitura')}.")
 
-    return ArquivoEntradaTemporario.objects.create(
-        usuario=usuario,
-        empresa_id=contexto.empresa_id,
-        competencia=contexto.competencia,
-        nome_original=nome,
-        extensao=extensao,
-        tamanho_bytes=len(conteudo),
-        arquivo_sha256=arquivo_sha256,
-        conteudo=conteudo,
-        inspecao=resumir_inspecao(resultado),
-        status=EstadoArquivoEntrada.EM_MAPEAMENTO,
-    )
+    perfil_origem = identificar_perfil_origem(contexto, nome, validar_contexto=False)
+    with transaction.atomic():
+        temporario = ArquivoEntradaTemporario.objects.create(
+            usuario=usuario,
+            empresa_id=contexto.empresa_id,
+            competencia=contexto.competencia,
+            nome_original=nome,
+            extensao=extensao,
+            tamanho_bytes=len(conteudo),
+            arquivo_sha256=arquivo_sha256,
+            conteudo=conteudo,
+            inspecao=resumir_inspecao(resultado),
+            perfil_origem=perfil_origem,
+            status=EstadoArquivoEntrada.EM_MAPEAMENTO,
+        )
+        registrar_processamento_concluido(temporario, contexto, usuario)
+    return temporario
 
 
 def obter_arquivo_contexto(

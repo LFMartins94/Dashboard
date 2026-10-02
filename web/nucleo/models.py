@@ -184,6 +184,13 @@ class ArquivoEntradaTemporario(models.Model):
     arquivo_sha256 = models.CharField(max_length=64)
     conteudo = models.BinaryField()
     inspecao = models.JSONField(default=dict)
+    perfil_origem = models.ForeignKey(
+        "PerfilOrigemEntrada",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="arquivos_identificados",
+    )
     status = models.CharField(
         max_length=20,
         choices=EstadoArquivoEntrada.choices,
@@ -467,4 +474,116 @@ class GeracaoRelatorio(models.Model):
                 fields=["empresa_id", "competencia", "gerado_em"],
                 name="idx_ger_rel_contexto",
             ),
+        ]
+
+
+class ModeloDocumentoEsperado(models.Model):
+    """Documento recorrente que deve aparecer no checklist de uma empresa."""
+
+    empresa_id = models.PositiveIntegerField()
+    nome = models.CharField(max_length=160)
+    tipo_documento = models.CharField(max_length=20, default="outro")
+    dia_limite = models.PositiveSmallIntegerField(null=True, blank=True)
+    obrigatorio = models.BooleanField(default=True)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_modelos_documentos_esperados"
+        verbose_name = "modelo de documento esperado"
+        verbose_name_plural = "modelos de documentos esperados"
+        constraints = [
+            models.UniqueConstraint(fields=["empresa_id", "nome"], name="uq_doc_esperado_empresa_nome"),
+            models.CheckConstraint(condition=models.Q(empresa_id__gt=0), name="ck_doc_esperado_empresa_pos"),
+            models.CheckConstraint(
+                condition=models.Q(dia_limite__isnull=True) | models.Q(dia_limite__gte=1, dia_limite__lte=31),
+                name="ck_doc_esperado_dia_limite",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["empresa_id", "ativo"], name="idx_doc_esperado_empresa"),
+        ]
+
+
+class PerfilOrigemEntrada(models.Model):
+    """Regra local de nome e pasta de referência para arquivos recebidos."""
+
+    empresa_id = models.PositiveIntegerField()
+    nome = models.CharField(max_length=80)
+    prefixo_nome = models.CharField(max_length=80)
+    pasta_referencia = models.CharField(max_length=255, blank=True)
+    tipo_documento = models.CharField(max_length=20, default="outro")
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "django_perfis_origem_entrada"
+        verbose_name = "perfil de origem de entrada"
+        verbose_name_plural = "perfis de origem de entrada"
+        constraints = [
+            models.UniqueConstraint(fields=["empresa_id", "nome"], name="uq_perfil_origem_empresa_nome"),
+            models.CheckConstraint(condition=models.Q(empresa_id__gt=0), name="ck_perfil_origem_empresa_pos"),
+        ]
+        indexes = [
+            models.Index(fields=["empresa_id", "ativo", "prefixo_nome"], name="idx_perfil_origem_empresa"),
+        ]
+
+
+class TipoTarefaAutomacao(models.TextChoices):
+    PROCESSAR_ARQUIVO = "processar_arquivo", "Processar arquivo"
+    VERIFICAR_PENDENCIAS = "verificar_pendencias", "Verificar pendências"
+
+
+class EstadoTarefaAutomacao(models.TextChoices):
+    AGUARDANDO = "aguardando", "Aguardando"
+    PROCESSANDO = "processando", "Processando"
+    CONCLUIDA = "concluida", "Concluída"
+    FALHA = "falha", "Falha"
+
+
+class TarefaAutomacao(models.Model):
+    """Fila persistida e visível para tarefas que podem exigir nova execução."""
+
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    tipo = models.CharField(max_length=30, choices=TipoTarefaAutomacao.choices)
+    estado = models.CharField(
+        max_length=20, choices=EstadoTarefaAutomacao.choices,
+        default=EstadoTarefaAutomacao.AGUARDANDO,
+    )
+    arquivo_entrada = models.ForeignKey(
+        ArquivoEntradaTemporario, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="tarefas_automacao",
+    )
+    detalhes = models.JSONField(default=dict)
+    tentativas = models.PositiveSmallIntegerField(default=0)
+    mensagem_erro = models.CharField(max_length=500, blank=True)
+    solicitada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="tarefas_automacao_solicitadas",
+    )
+    criada_em = models.DateTimeField(auto_now_add=True)
+    iniciada_em = models.DateTimeField(null=True, blank=True)
+    concluida_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "django_tarefas_automacao"
+        verbose_name = "tarefa de automação"
+        verbose_name_plural = "tarefas de automação"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(empresa_id__gt=0), name="ck_tarefa_auto_empresa_pos"),
+            models.CheckConstraint(
+                condition=models.Q(competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"),
+                name="ck_tarefa_auto_periodo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo__in=TipoTarefaAutomacao.values), name="ck_tarefa_auto_tipo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(estado__in=EstadoTarefaAutomacao.values), name="ck_tarefa_auto_estado",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["empresa_id", "competencia", "estado"], name="idx_tarefa_auto_contexto"),
         ]

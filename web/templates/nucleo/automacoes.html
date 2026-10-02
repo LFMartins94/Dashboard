@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao entradas-apresentacao">
+    <div>
+        <p class="sobretitulo">Rotina recorrente</p>
+        <h1>Automatize o acompanhamento.</h1>
+        <p class="descricao-pagina">Defina o que cada empresa precisa receber e acompanhe tarefas sem automatizar decisões contábeis.</p>
+    </div>
+    <form method="post">
+        {% csrf_token %}<input type="hidden" name="acao" value="verificar">
+        <button class="botao-primario" type="submit">Atualizar lembretes</button>
+    </form>
+</section>
+
+<section class="grade-automacoes">
+    <article class="painel">
+        <header class="painel-cabecalho"><h2 class="titulo-secao">Documentos esperados</h2><p class="subtitulo-secao">Copiados automaticamente quando uma nova competência é iniciada.</p></header>
+        <form method="post" class="formulario-automacao">
+            {% csrf_token %}<input type="hidden" name="acao" value="criar_documento">
+            <div class="campo"><label for="{{ formulario_documento.nome.id_for_label }}">Documento</label>{{ formulario_documento.nome }}</div>
+            <div class="campo"><label for="{{ formulario_documento.tipo_documento.id_for_label }}">Tipo</label>{{ formulario_documento.tipo_documento }}</div>
+            <div class="campo"><label for="{{ formulario_documento.dia_limite.id_for_label }}">Dia limite</label>{{ formulario_documento.dia_limite }}<small>Opcional.</small></div>
+            <label class="campo campo-opcao">{{ formulario_documento.obrigatorio }}<span>Obrigatório</span></label>
+            <button class="botao-secundario" type="submit">Salvar documento</button>
+        </form>
+        <div class="lista-perfis">
+            {% for modelo in modelos_documento %}<div><strong>{{ modelo.nome }}</strong><small>{{ modelo.get_tipo_documento_display }}{% if modelo.dia_limite %} · dia {{ modelo.dia_limite }}{% endif %}{% if modelo.obrigatorio %} · obrigatório{% endif %}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhum documento recorrente foi configurado.</p>{% endfor %}
+        </div>
+    </article>
+
+    <article class="painel">
+        <header class="painel-cabecalho"><h2 class="titulo-secao">Lembretes internos</h2><p class="subtitulo-secao">Pendências do contexto {{ contexto.competencia_exibicao }}.</p></header>
+        <div class="lista-lembretes">
+            {% for lembrete in lembretes %}
+            <div class="lembrete{% if lembrete.atrasado %} atrasado{% endif %}"><span class="sinal-alerta"></span><div><strong>{{ lembrete.titulo }}</strong><small>{{ lembrete.prazo }}{% if lembrete.obrigatorio %} · obrigatório{% endif %}</small></div><em>{% if lembrete.atrasado %}Em atraso{% else %}Pendente{% endif %}</em></div>
+            {% empty %}<div class="vazio-painel compacto"><strong>Nenhum lembrete aberto.</strong><span>Configure documentos esperados para esta empresa.</span></div>{% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="grade-automacoes">
+    <article class="painel">
+        <header class="painel-cabecalho"><h2 class="titulo-secao">Perfis de origem</h2><p class="subtitulo-secao">Sugestão por nome de arquivo; a escolha do destino continua manual.</p></header>
+        <form method="post" class="formulario-origem">
+            {% csrf_token %}<input type="hidden" name="acao" value="criar_origem">
+            <div class="campo"><label for="{{ formulario_origem.nome.id_for_label }}">Nome</label>{{ formulario_origem.nome }}</div>
+            <div class="campo"><label for="{{ formulario_origem.prefixo_nome.id_for_label }}">Prefixo</label>{{ formulario_origem.prefixo_nome }}</div>
+            <div class="campo"><label for="{{ formulario_origem.pasta_referencia.id_for_label }}">Pasta de referência</label>{{ formulario_origem.pasta_referencia }}<small>Somente referência; o sistema não acessa esta pasta.</small></div>
+            <div class="campo"><label for="{{ formulario_origem.tipo_documento.id_for_label }}">Tipo sugerido</label>{{ formulario_origem.tipo_documento }}</div>
+            <button class="botao-secundario" type="submit">Salvar perfil</button>
+        </form>
+        <div class="lista-perfis">
+            {% for perfil in perfis_origem %}<div><strong>{{ perfil.nome }} · {{ perfil.prefixo_nome }}</strong><small>{{ perfil.get_tipo_documento_display }}{% if perfil.pasta_referencia %} · {{ perfil.pasta_referencia }}{% endif %}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhum perfil de origem foi configurado.</p>{% endfor %}
+        </div>
+    </article>
+
+    <article class="painel">
+        <header class="painel-cabecalho"><h2 class="titulo-secao">Fila de processamento</h2><p class="subtitulo-secao">O status de cada inspeção fica visível. Falhas podem ser reexecutadas até três vezes.</p></header>
+        <div class="lista-tarefas">
+            {% for tarefa in tarefas %}
+            <article class="tarefa-automacao estado-{{ tarefa.estado }}"><div><strong>{{ tarefa.get_tipo_display }}</strong><small>{{ tarefa.criada_em|date:"d/m/Y H:i" }} · tentativa {{ tarefa.tentativas }}</small>{% if tarefa.arquivo_entrada %}<small>{{ tarefa.arquivo_entrada.nome_original }}</small>{% endif %}{% if tarefa.mensagem_erro %}<small class="texto-erro">{{ tarefa.mensagem_erro }}</small>{% endif %}</div><span>{{ tarefa.get_estado_display }}</span>{% if tarefa.estado == "falha" %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="reexecutar"><input type="hidden" name="tarefa_id" value="{{ tarefa.id }}"><button class="botao-secundario" type="submit">Reexecutar</button></form>{% endif %}</article>
+            {% empty %}<div class="vazio-painel compacto">Nenhuma tarefa foi registrada nesta competência.</div>{% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="painel painel-informativo-automacao">
+    <div><p class="sobretitulo">Limite de automação</p><h2>Pastas e e-mails externos ainda não são conectados.</h2><p>Os perfis apenas organizam a entrada manual no navegador. Uma integração externa será considerada após definição de credenciais, permissões e autorização específica.</p></div>
+</section>
+{% endblock %}

@@ -277,3 +277,21 @@ class FormularioGerarRelatorio(forms.Form):
     ))
     formato = forms.ChoiceField(choices=(("xlsx", "Excel"), ("pdf", "PDF")))
     perfil_id = forms.IntegerField(required=False, min_value=1)
+
+
+class FormularioModeloDocumentoEsperado(forms.Form):
+    nome = forms.CharField(label="Documento", max_length=160)
+    tipo_documento = forms.ChoiceField(label="Tipo", choices=TIPOS_DOCUMENTO)
+    dia_limite = forms.IntegerField(label="Dia limite", required=False, min_value=1, max_value=31)
+    obrigatorio = forms.BooleanField(label="Obrigatório", required=False, initial=True)
+
+
+class FormularioPerfilOrigemEntrada(forms.Form):
+    nome = forms.CharField(label="Nome do perfil", max_length=80)
+    prefixo_nome = forms.CharField(label="Prefixo do arquivo", max_length=80)
+    pasta_referencia = forms.CharField(label="Pasta de referência", max_length=255, required=False)
+    tipo_documento = forms.ChoiceField(label="Tipo sugerido", choices=TIPOS_DOCUMENTO)
+
+
+class FormularioTarefaAutomacao(forms.Form):
+    tarefa_id = forms.IntegerField(min_value=1)

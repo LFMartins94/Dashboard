@@ -88,6 +88,8 @@ A Auditoria está disponível em `/auditoria/`, com regras reproduzíveis, resol
 
 As Entregas estão disponíveis em `/entregas/`. Elas geram balancete com saldo anterior, débitos, créditos e saldo final, DRE agrupada pelo plano de classificação confirmado pela contadora e exportações de lançamentos em perfis genéricos ou personalizados. Excel e PDF não carregam colunas técnicas; toda geração registra contexto, parâmetros e versão do cálculo. A evidência está em `docs/aceitacao_etapa10.md`.
 
+As Automações estão disponíveis em `/automacoes/`. A contadora configura documentos esperados, prazos e perfis de origem por empresa. Ao iniciar uma competência, o sistema copia esses documentos para o checklist e registra a verificação de pendências. Cada arquivo recebido fica associado a uma tarefa de processamento; falhas podem ser reexecutadas com limite de tentativas. Pastas e e-mail externos permanecem desconectados até haver credenciais, permissões e autorização específica. A evidência está em `docs/aceitacao_etapa11.md`.
+
 ## Automação por nível de risco
 
 ### Automático

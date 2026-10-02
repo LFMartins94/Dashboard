@@ -153,8 +153,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 8 | Pendente | Depende da Etapa 7 |
 | 9 | Pendente | Depende da Etapa 8 |
 | 10 | Concluída | Entregas, relatórios, perfis e registro de geração validados localmente |
-| 11 | Aguardando autorização | Automações recorrentes |
-| 12 | Pendente | Depende da Etapa 11 |
+| 11 | Concluída | Automações recorrentes, lembretes, perfis de origem e fila local validados |
+| 12 | Aguardando autorização | Assistente |
 | 13 | Pendente | Depende da Etapa 12 |
 
 ## Atualização da Etapa 6
@@ -176,3 +176,7 @@ Etapa 9 concluída. A Auditoria executa regras determinísticas, preserva víncu
 ## Atualização da Etapa 10
 
 Etapa 10 concluída em ambiente local. A rota `/entregas/` gera balancete com saldo anterior, débitos, créditos e saldo final, DRE baseada em classificações de prefixo confirmadas pela contadora e exportações de lançamentos por perfil genérico ou personalizado. PDF e Excel excluem colunas técnicas; cada geração preserva empresa, competência, parâmetros, versão de cálculo, usuária e horário. A migração `0007_entregas_relatorios.py` cria as tabelas locais, ativa RLS no PostgreSQL e revoga acesso dos papéis públicos, mas não foi aplicada em produção. Os resultados finais dos testes e verificações desta etapa ficam registrados em `docs/aceitacao_etapa10.md`. A próxima etapa é a Etapa 11, Automações recorrentes, aguardando autorização.
+
+## Atualização da Etapa 11
+
+Etapa 11 concluída em ambiente local. A rota `/automacoes/` configura documentos esperados, prazos e perfis de origem por empresa; a abertura de uma competência copia os documentos ativos para o checklist sem duplicar itens. Os lembretes internos e a fila de processamento exibem pendências, estado e tentativas. Cada arquivo aceito cria uma tarefa concluída de inspeção; uma falha pode ser reexecutada no mesmo contexto, até três vezes. Pastas e e-mail externos permanecem intencionalmente desconectados até que existam credenciais, permissões e autorização específica. A migração `0008_automacoes_recorrentes.py` prepara tabelas, RLS e bloqueio de papéis públicos, mas não foi aplicada em produção. Os resultados finais das verificações desta etapa ficam em `docs/aceitacao_etapa11.md`. A próxima etapa é a Etapa 12, Assistente, aguardando autorização.
