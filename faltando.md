@@ -168,3 +168,7 @@ Etapa 7 concluída. O Assistente agora possui conversas persistidas, exclusão l
 ## Atualização da Etapa 8
 
 Etapa 8 concluída. A Conciliação compara um extrato aos lançamentos aprovados ou a outro lote da empresa e competência atuais com regras determinísticas, mostra pares exatos, candidatos, divergências e linhas sem correspondência, e registra decisões humanas com justificativa. O resumo da competência é substituído ao reexecutar, sem duplicação. A migração `0005_revisoes_conciliacao.py` está pronta, com RLS e revogação de acesso público, mas não foi aplicada em produção. Foram aprovados 53 testes Django e 31 testes legados. A próxima etapa é a Etapa 9, Auditoria operacional, aguardando autorização.
+
+## Atualização da Etapa 9
+
+Etapa 9 concluída. A Auditoria executa regras determinísticas, preserva vínculos aos lançamentos novos, mostra registros antigos sem vínculo para revisão humana, permite resolver ou reabrir com usuário, data e justificativa, exibe a trilha de alterações e exporta exceções sem colunas técnicas. A migração `0006_auditoria_operacional.py` prepara triggers, RLS e estados de resolução, mas não foi aplicada em produção. Foram aprovados 55 testes Django e 31 testes legados. A próxima etapa é a Etapa 10, Entregas e relatórios, aguardando autorização.

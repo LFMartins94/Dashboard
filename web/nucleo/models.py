@@ -334,3 +334,44 @@ class RevisaoConciliacao(models.Model):
                 name="idx_rev_conc_contexto",
             ),
         ]
+
+
+class EstadoOcorrenciaAuditoria(models.Model):
+    """Complementa a ocorrência legada com resolução atribuída a usuário."""
+
+    ocorrencia_id = models.BigIntegerField(unique=True)
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    resolvida = models.BooleanField(default=False)
+    justificativa = models.CharField(max_length=500, blank=True)
+    resolvida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ocorrencias_auditoria_resolvidas",
+    )
+    resolvida_em = models.DateTimeField(null=True, blank=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_estados_ocorrencias_auditoria"
+        verbose_name = "estado de ocorrência de auditoria"
+        verbose_name_plural = "estados de ocorrências de auditoria"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_est_aud_empresa_pos",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"
+                ),
+                name="ck_est_aud_periodo",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "competencia", "resolvida"],
+                name="idx_est_aud_contexto",
+            ),
+        ]

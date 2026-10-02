@@ -33,6 +33,7 @@ from .formularios import (
     FormularioConversaAssistente,
     FormularioExecutarConciliacao,
     FormularioDecisaoConciliacao,
+    FormularioResolucaoAuditoria,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -68,6 +69,7 @@ from .servicos.trabalho import (
 from .servicos import conferencia as servico_conferencia
 from .servicos import assistente as servico_assistente
 from .servicos import conciliacao as servico_conciliacao
+from .servicos import auditoria as servico_auditoria
 
 logger = logging.getLogger(__name__)
 
@@ -647,6 +649,45 @@ def conciliacao(requisicao: HttpRequest) -> HttpResponse:
         messages.error(requisicao, str(erro) or "Não foi possível executar a conciliação.")
     return render(requisicao, "nucleo/conciliacao.html", {
         "titulo_pagina": "Conciliação", "secao_ativa": "conciliacao",
+        "contexto": contexto, **dados,
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def auditoria(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao")
+            if acao == "executar":
+                dados, novas = servico_auditoria.executar(contexto)
+                messages.success(requisicao, f"Auditoria concluída com {novas} nova(s) ocorrência(s).")
+            elif acao == "resolver":
+                formulario = FormularioResolucaoAuditoria(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_auditoria.ErroAuditoria("Revise a resolução informada.")
+                dados = servico_auditoria.resolver(
+                    contexto, requisicao.user,
+                    formulario.cleaned_data["ocorrencia_id"],
+                    formulario.cleaned_data["resolvida"],
+                    formulario.cleaned_data["justificativa"],
+                )
+                messages.success(requisicao, "Estado da ocorrência atualizado.")
+            elif acao == "exportar":
+                conteudo = servico_auditoria.exportar_csv(contexto)
+                resposta = HttpResponse(conteudo, content_type="text/csv; charset=utf-8")
+                resposta["Content-Disposition"] = f'attachment; filename="auditoria_{contexto.competencia}.csv"'
+                return resposta
+            else:
+                raise servico_auditoria.ErroAuditoria("Ação de auditoria inválida.")
+        else:
+            dados = servico_auditoria.carregar(contexto)
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de auditoria recusada: %s", erro)
+        messages.error(requisicao, str(erro) or "Não foi possível concluir a auditoria.")
+        dados = servico_auditoria.carregar(contexto)
+    return render(requisicao, "nucleo/auditoria.html", {
+        "titulo_pagina": "Auditoria", "secao_ativa": "auditoria",
         "contexto": contexto, **dados,
     })
 

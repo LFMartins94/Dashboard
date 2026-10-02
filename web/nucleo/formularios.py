@@ -246,3 +246,9 @@ class FormularioDecisaoConciliacao(FormularioExecutarConciliacao):
         ("manual", "Ajuste manual"),
     ))
     justificativa = forms.CharField(max_length=500, required=False)
+
+
+class FormularioResolucaoAuditoria(forms.Form):
+    ocorrencia_id = forms.IntegerField(min_value=1)
+    resolvida = forms.BooleanField(required=False)
+    justificativa = forms.CharField(max_length=500, required=False)

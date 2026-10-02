@@ -272,7 +272,7 @@ Implementação concluída em `docs/aceitacao_etapa8.md`. A migração de revis�
 
 ## Etapa 9 — Auditoria operacional
 
-**Status:** aguardando.
+**Status:** concluída.
 
 ### Objetivo
 
@@ -292,6 +292,8 @@ Transformar auditoria em uma trilha de exceções e histórico, sem julgamento d
 - Toda ocorrência nova aponta para o lançamento quando existir.
 - Auditoria repetida é idempotente.
 - A contadora consegue entender e resolver cada ocorrência.
+
+Implementação concluída em `docs/aceitacao_etapa9.md`. A migração de histórico, triggers e estados de resolução permanece preparada localmente e será aplicada no Supabase somente na Etapa 13.
 
 ## Etapa 10 — Entregas e relatórios
 

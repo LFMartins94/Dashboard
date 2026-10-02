@@ -46,6 +46,7 @@ urlpatterns = [
         name="conferencia",
     ),
     path("conciliacao/", views.conciliacao, name="conciliacao"),
+    path("auditoria/", views.auditoria, name="auditoria"),
     path("entregas/", views.modulo, {"secao": "entregas"}, name="entregas"),
     path(
         "assistente/",

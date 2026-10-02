@@ -503,3 +503,9 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 .revisao-conciliacao form { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
 .revisao-conciliacao input { min-height:34px; }
 @media (max-width:700px) { .lista-resultados > div, .revisao-conciliacao { align-items:flex-start; flex-direction:column; } }
+.ocorrencia-auditoria { border-top:1px solid var(--linha); display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 0; }
+.ocorrencia-auditoria p { margin:7px 0; }
+.ocorrencia-auditoria small { color:var(--texto-secundario); display:block; }
+.formulario-resolucao { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.formulario-resolucao input { min-height:34px; }
+@media (max-width:700px) { .ocorrencia-auditoria { align-items:flex-start; flex-direction:column; } }

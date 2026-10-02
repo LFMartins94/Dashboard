@@ -84,6 +84,8 @@ O Assistente está disponível em `/assistente/` para consultas controladas. Ele
 
 A Conciliação está disponível em `/conciliacao/`: ela compara um extrato com uma referência do mesmo contexto, confirma apenas pares inequívocos e mantém candidatos e divergências para decisão humana. A evidência está em `docs/aceitacao_etapa8.md`.
 
+A Auditoria está disponível em `/auditoria/`, com regras reproduzíveis, resolução atribuída à usuária, exportação de exceções e histórico de alterações. A evidência está em `docs/aceitacao_etapa9.md`.
+
 ## Automação por nível de risco
 
 ### Automático

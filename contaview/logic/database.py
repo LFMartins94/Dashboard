@@ -952,6 +952,9 @@ def inserir_ocorrencias(ocorrencias: list[dict]) -> int:
         return 0
     try:
         with _get_engine().begin() as conn:
+            _definir_usuario_auditoria(conn)
+            if conn.dialect.name == "postgresql":
+                conn.execute(text("LOCK TABLE ocorrencias_auditoria IN SHARE ROW EXCLUSIVE MODE"))
             empresas = {int(item["empresa_id"]) for item in ocorrencias}
             existentes: set[tuple] = set()
             for empresa_id in empresas:
@@ -1026,6 +1029,48 @@ def atualizar_ocorrencia_resolvida(ocorrencia_id: int, resolvida: bool) -> None:
     except SQLAlchemyError as exc:
         logger.error("Erro ao atualizar ocorrencia %d: %s", ocorrencia_id, exc)
         raise exc
+
+
+def atualizar_ocorrencia_resolvida_empresa(
+    empresa_id: int, ocorrencia_id: int, resolvida: bool,
+) -> None:
+    """Atualiza uma ocorrência somente dentro da empresa validada."""
+    with _get_engine().begin() as conn:
+        _definir_usuario_auditoria(conn)
+        resultado = conn.execute(text("""
+            UPDATE ocorrencias_auditoria
+            SET resolvida = :resolvida
+            WHERE id = :ocorrencia_id AND empresa_id = :empresa_id
+        """), {
+            "empresa_id": empresa_id,
+            "ocorrencia_id": ocorrencia_id,
+            "resolvida": resolvida,
+        })
+        if resultado.rowcount != 1:
+            raise ValueError("Ocorrência não encontrada para a empresa selecionada.")
+
+
+def carregar_historico_alteracoes(
+    empresa_id: int, lancamento_id: int | None = None, limite: int = 100,
+) -> list[dict]:
+    """Consulta a trilha de alterações sem expor dados brutos de importação."""
+    sql = """
+        SELECT tabela, registro_id, operacao, dados_anteriores,
+               dados_posteriores, usuario, alterado_em
+        FROM historico_alteracoes
+        WHERE empresa_id = :empresa_id
+    """
+    parametros = {"empresa_id": empresa_id, "limite": limite}
+    if lancamento_id is not None:
+        sql += " AND tabela = 'lancamentos' AND registro_id = :lancamento_id"
+        parametros["lancamento_id"] = lancamento_id
+    sql += " ORDER BY alterado_em DESC LIMIT :limite"
+    try:
+        with _get_engine().connect() as conn:
+            return [dict(linha._mapping) for linha in conn.execute(text(sql), parametros)]
+    except SQLAlchemyError as exc:
+        logger.warning("Histórico de alterações indisponível: %s", exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
