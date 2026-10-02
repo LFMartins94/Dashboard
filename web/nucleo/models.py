@@ -587,3 +587,42 @@ class TarefaAutomacao(models.Model):
         indexes = [
             models.Index(fields=["empresa_id", "competencia", "estado"], name="idx_tarefa_auto_contexto"),
         ]
+
+
+class RegistroConsultaAssistente(models.Model):
+    """Rastreabilidade das consultas que receberam contexto contábil agregado."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="consultas_assistente",
+    )
+    conversa_id = models.PositiveIntegerField()
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    pergunta = models.TextField()
+    resposta = models.TextField()
+    filtros = models.JSONField(default=dict)
+    fontes = models.JSONField(default=list)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "django_registros_consultas_assistente"
+        verbose_name = "registro de consulta do assistente"
+        verbose_name_plural = "registros de consultas do assistente"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(conversa_id__gt=0), name="ck_consulta_assist_conversa_pos"),
+            models.CheckConstraint(condition=models.Q(empresa_id__gt=0), name="ck_consulta_assist_empresa_pos"),
+            models.CheckConstraint(
+                condition=models.Q(competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"),
+                name="ck_consulta_assist_periodo",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "competencia", "conversa_id", "criado_em"],
+                name="idx_consulta_assist_contexto",
+            ),
+        ]

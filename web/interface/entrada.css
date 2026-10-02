@@ -496,6 +496,12 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 .formulario-chat { border-top:1px solid var(--linha); padding-top:14px; }
 .formulario-chat textarea { width:100%; resize:vertical; }
 .rodape-chat { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:8px; }
+.aviso-assistente { color:var(--texto-secundario); background:var(--papel); border:1px solid var(--linha); border-radius:10px; margin:0 0 14px; padding:10px 12px; font-size:.78rem; line-height:1.5; }
+.fontes-consulta { border-top:1px solid var(--linha); margin-top:10px; padding-top:9px; }
+.fontes-consulta strong { color:var(--texto-secundario); display:block; font-size:.72rem; }
+.fontes-consulta ul { display:grid; gap:6px; list-style:none; margin:7px 0 0; padding:0; }
+.fontes-consulta li { color:var(--texto-secundario); font-size:.72rem; line-height:1.4; }
+.fontes-consulta li span { color:var(--texto); display:block; font-weight:700; }
 @media (max-width:900px) { .layout-assistente { grid-template-columns:1fr; } .lista-conversas { min-height:auto; } .mensagem-chat { max-width:95%; } }
 .lista-resultados { display:grid; gap:8px; }
 .lista-resultados > div, .revisao-conciliacao { border-top:1px solid var(--linha); padding:12px 0; display:flex; justify-content:space-between; gap:14px; align-items:center; }

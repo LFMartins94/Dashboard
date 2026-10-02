@@ -345,7 +345,7 @@ Reduzir atividades repetitivas depois que o ciclo básico estiver estável.
 
 ## Etapa 12 — Assistente
 
-**Status:** aguardando.
+**Status:** concluída em ambiente local; migração pendente para o corte da Etapa 13.
 
 ### Objetivo
 

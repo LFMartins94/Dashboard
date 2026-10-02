@@ -1,11 +1,83 @@
 {% extends "base.html" %}
 {% block conteudo %}
-<section class="cabecalho-pagina"><div><span class="sobretitulo">Consultas orientadas</span><h1>Assistente</h1><p>Faça perguntas em linguagem natural. O assistente não altera lançamentos.</p></div><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="nova"><button class="botao secundario" type="submit">Nova conversa</button></form></section>
+<section class="cabecalho-pagina">
+  <div>
+    <span class="sobretitulo">Consultas orientadas</span>
+    <h1>Assistente</h1>
+    <p>Faça perguntas em linguagem natural. O assistente consulta somente resumos da empresa e competência atuais.</p>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="acao" value="nova">
+    <button class="botao secundario" type="submit">Nova conversa</button>
+  </form>
+</section>
+
 <div class="layout-assistente">
-  <aside class="cartao lista-conversas"><div class="cartao-cabecalho"><h2>Conversas</h2></div>{% for conversa in conversas %}<div class="item-conversa{% if conversa.id == conversa_id %} ativo{% endif %}"><a href="?conversa={{ conversa.id }}">{{ conversa.titulo }}</a><form method="post">{% csrf_token %}<input type="hidden" name="acao" value="excluir"><input type="hidden" name="conversa_id" value="{{ conversa.id }}"><button class="botao-excluir" type="submit" aria-label="Excluir conversa">Excluir</button></form></div>{% empty %}<p class="texto-auxiliar">Nenhuma conversa iniciada.</p>{% endfor %}</aside>
-  <section class="cartao painel-chat"><div class="cartao-cabecalho"><div><h2>{% if conversa_id %}Conversa ativa{% else %}Comece uma conversa{% endif %}</h2><p>Contexto: {{ contexto.empresa_nome }} · {{ contexto.competencia_exibicao }}</p></div><span class="etiqueta informacao">Somente consulta</span></div>
-    <div class="mensagens-chat" aria-live="polite">{% for mensagem in mensagens %}<article class="mensagem-chat {{ mensagem.role }}"><span class="rotulo-mensagem">{% if mensagem.role == 'user' %}Você{% else %}Assistente{% endif %}</span><p>{{ mensagem.content|linebreaksbr }}</p></article>{% empty %}<div class="estado-vazio"><h3>Como posso ajudar?</h3><p>Exemplos: “Qual foi o saldo da competência?” ou “Há pendências de auditoria?”</p></div>{% endfor %}</div>
-    <form method="post" class="formulario-chat">{% csrf_token %}<input type="hidden" name="acao" value="mensagem"><input type="hidden" name="conversa_id" value="{{ conversa_id|default:'' }}"><textarea name="conteudo" rows="3" maxlength="4000" placeholder="Escreva sua dúvida contábil..." required></textarea><div class="rodape-chat"><small>Não envie CPFs, CNPJs ou dados nominais de terceiros.</small><button class="botao primario" type="submit">Enviar mensagem</button></div></form>
+  <aside class="cartao lista-conversas">
+    <div class="cartao-cabecalho"><h2>Conversas</h2></div>
+    {% for conversa in conversas %}
+      <div class="item-conversa{% if conversa.id == conversa_id %} ativo{% endif %}">
+        <a href="?conversa={{ conversa.id }}">{{ conversa.titulo }}</a>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="excluir">
+          <input type="hidden" name="conversa_id" value="{{ conversa.id }}">
+          <button class="botao-excluir" type="submit" aria-label="Excluir conversa">Excluir</button>
+        </form>
+      </div>
+    {% empty %}
+      <p class="texto-auxiliar">Nenhuma conversa iniciada.</p>
+    {% endfor %}
+  </aside>
+
+  <section class="cartao painel-chat">
+    <div class="cartao-cabecalho">
+      <div>
+        <h2>{% if conversa_id %}Conversa ativa{% else %}Comece uma conversa{% endif %}</h2>
+        <p>Contexto: {{ contexto.empresa_nome }} · {{ contexto.competencia_exibicao }}</p>
+      </div>
+      <span class="etiqueta informacao">Somente consulta</span>
+    </div>
+
+    <div class="aviso-assistente">
+      Os valores são calculados no servidor a partir de fontes identificadas abaixo de cada resposta. O assistente não altera lançamentos, lotes ou ocorrências.
+    </div>
+
+    <div class="mensagens-chat" aria-live="polite">
+      {% for mensagem in mensagens %}
+        <article class="mensagem-chat {{ mensagem.role }}">
+          <span class="rotulo-mensagem">{% if mensagem.role == 'user' %}Você{% else %}Assistente{% endif %}</span>
+          <p>{{ mensagem.content|linebreaksbr }}</p>
+          {% if mensagem.fontes %}
+            <section class="fontes-consulta" aria-label="Fontes consultadas">
+              <strong>Fontes consultadas</strong>
+              <ul>
+                {% for fonte in mensagem.fontes %}
+                  <li><span>{{ fonte.nome }}</span>{{ fonte.descricao }}</li>
+                {% endfor %}
+              </ul>
+            </section>
+          {% endif %}
+        </article>
+      {% empty %}
+        <div class="estado-vazio">
+          <h3>Como posso ajudar?</h3>
+          <p>Exemplos: “Qual foi o saldo da competência?” ou “Há pendências de auditoria?”</p>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" class="formulario-chat">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="mensagem">
+      <input type="hidden" name="conversa_id" value="{{ conversa_id|default:'' }}">
+      <textarea name="conteudo" rows="3" maxlength="4000" placeholder="Escreva sua dúvida contábil..." required></textarea>
+      <div class="rodape-chat">
+        <small>Não envie CPFs, CNPJs, e-mails ou dados nominais de terceiros.</small>
+        <button class="botao primario" type="submit">Enviar mensagem</button>
+      </div>
+    </form>
   </section>
 </div>
 {% endblock %}

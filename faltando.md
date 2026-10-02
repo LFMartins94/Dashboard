@@ -154,8 +154,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 9 | Pendente | Depende da Etapa 8 |
 | 10 | Concluída | Entregas, relatórios, perfis e registro de geração validados localmente |
 | 11 | Concluída | Automações recorrentes, lembretes, perfis de origem e fila local validados |
-| 12 | Aguardando autorização | Assistente |
-| 13 | Pendente | Depende da Etapa 12 |
+| 12 | Concluída | Assistente com agregados, fontes e rastreabilidade local validados |
+| 13 | Aguardando autorização | Corte, migrações e implantação |
 
 ## Atualização da Etapa 6
 
@@ -180,3 +180,7 @@ Etapa 10 concluída em ambiente local. A rota `/entregas/` gera balancete com sa
 ## Atualização da Etapa 11
 
 Etapa 11 concluída em ambiente local. A rota `/automacoes/` configura documentos esperados, prazos e perfis de origem por empresa; a abertura de uma competência copia os documentos ativos para o checklist sem duplicar itens. Os lembretes internos e a fila de processamento exibem pendências, estado e tentativas. Cada arquivo aceito cria uma tarefa concluída de inspeção; uma falha pode ser reexecutada no mesmo contexto, até três vezes. Pastas e e-mail externos permanecem intencionalmente desconectados até que existam credenciais, permissões e autorização específica. A migração `0008_automacoes_recorrentes.py` prepara tabelas, RLS e bloqueio de papéis públicos, mas não foi aplicada em produção. Os resultados finais das verificações desta etapa ficam em `docs/aceitacao_etapa11.md`. A próxima etapa é a Etapa 12, Assistente, aguardando autorização.
+
+## Atualização da Etapa 12
+
+Etapa 12 concluída em ambiente local. O Assistente passou a receber somente um resumo agregado, calculado no servidor, de lançamentos aprovados, conciliação, auditoria, checklist e automações da empresa e competência validadas. Nenhuma ferramenta de banco é exposta ao modelo. A tela mostra as fontes que sustentam cada resposta; pergunta saneada, filtros, resposta e fontes ficam registrados em `django_registros_consultas_assistente`. CPFs, CNPJs, e-mails e referências nominais de terceiros são ocultados antes de persistir ou enviar conteúdo à IA. Perguntas de valor sem dados retornam ausência de informação sem chamar o modelo ou estimar números. A migração `0009_registros_consultas_assistente.py` prepara tabela, constraints, índice, RLS e revogação de papéis públicos, mas não foi aplicada em produção. Foram aprovados 70 testes Django e 31 testes legados; a evidência detalhada está em `docs/aceitacao_etapa12.md`. A próxima etapa é a Etapa 13, Corte e implantação, aguardando autorização.

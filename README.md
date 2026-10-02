@@ -80,7 +80,7 @@ A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e pre
 
 O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas são feitas na tela de Conferência. A evidência está em `docs/aceitacao_etapa6.md`.
 
-O Assistente está disponível em `/assistente/` para consultas controladas. Ele respeita a empresa e competência selecionadas, remove identificadores antes da chamada à IA e não executa alterações contábeis. A evidência está em `docs/aceitacao_etapa7.md`.
+O Assistente está disponível em `/assistente/` para consultas controladas. O servidor calcula lançamentos, conciliação, auditoria, checklist e automações no contexto selecionado e envia à IA somente totais, contagens e estados agregados. Cada resposta mostra as fontes consultadas e registra pergunta, filtros, resposta e fontes para rastreabilidade. CPFs, CNPJs, e-mails e referências nominais de terceiros são ocultados antes da persistência e da chamada à IA. O Assistente não executa alterações contábeis. A evidência está em `docs/aceitacao_etapa12.md`.
 
 A Conciliação está disponível em `/conciliacao/`: ela compara um extrato com uma referência do mesmo contexto, confirma apenas pares inequívocos e mantém candidatos e divergências para decisão humana. A evidência está em `docs/aceitacao_etapa8.md`.
 
