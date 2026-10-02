@@ -152,8 +152,8 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 7 | Pendente | Depende da Etapa 6 |
 | 8 | Pendente | Depende da Etapa 7 |
 | 9 | Pendente | Depende da Etapa 8 |
-| 10 | Pendente | Depende da Etapa 9 |
-| 11 | Pendente | Depende da Etapa 10 |
+| 10 | Concluída | Entregas, relatórios, perfis e registro de geração validados localmente |
+| 11 | Aguardando autorização | Automações recorrentes |
 | 12 | Pendente | Depende da Etapa 11 |
 | 13 | Pendente | Depende da Etapa 12 |
 
@@ -172,3 +172,7 @@ Etapa 8 concluída. A Conciliação compara um extrato aos lançamentos aprovado
 ## Atualização da Etapa 9
 
 Etapa 9 concluída. A Auditoria executa regras determinísticas, preserva vínculos aos lançamentos novos, mostra registros antigos sem vínculo para revisão humana, permite resolver ou reabrir com usuário, data e justificativa, exibe a trilha de alterações e exporta exceções sem colunas técnicas. A migração `0006_auditoria_operacional.py` prepara triggers, RLS e estados de resolução, mas não foi aplicada em produção. Foram aprovados 55 testes Django e 31 testes legados. A próxima etapa é a Etapa 10, Entregas e relatórios, aguardando autorização.
+
+## Atualização da Etapa 10
+
+Etapa 10 concluída em ambiente local. A rota `/entregas/` gera balancete com saldo anterior, débitos, créditos e saldo final, DRE baseada em classificações de prefixo confirmadas pela contadora e exportações de lançamentos por perfil genérico ou personalizado. PDF e Excel excluem colunas técnicas; cada geração preserva empresa, competência, parâmetros, versão de cálculo, usuária e horário. A migração `0007_entregas_relatorios.py` cria as tabelas locais, ativa RLS no PostgreSQL e revoga acesso dos papéis públicos, mas não foi aplicada em produção. Os resultados finais dos testes e verificações desta etapa ficam registrados em `docs/aceitacao_etapa10.md`. A próxima etapa é a Etapa 11, Automações recorrentes, aguardando autorização.

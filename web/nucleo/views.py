@@ -34,6 +34,9 @@ from .formularios import (
     FormularioExecutarConciliacao,
     FormularioDecisaoConciliacao,
     FormularioResolucaoAuditoria,
+    FormularioClassificacaoDre,
+    FormularioGerarRelatorio,
+    FormularioPerfilExportacao,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -70,6 +73,7 @@ from .servicos import conferencia as servico_conferencia
 from .servicos import assistente as servico_assistente
 from .servicos import conciliacao as servico_conciliacao
 from .servicos import auditoria as servico_auditoria
+from .servicos import relatorios as servico_relatorios
 
 logger = logging.getLogger(__name__)
 
@@ -689,6 +693,49 @@ def auditoria(requisicao: HttpRequest) -> HttpResponse:
     return render(requisicao, "nucleo/auditoria.html", {
         "titulo_pagina": "Auditoria", "secao_ativa": "auditoria",
         "contexto": contexto, **dados,
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def entregas(requisicao: HttpRequest) -> HttpResponse:
+    contexto = exigir_contexto(requisicao)
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao")
+            if acao == "criar_perfil":
+                formulario = FormularioPerfilExportacao(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_relatorios.ErroRelatorio("Revise os campos do perfil de exportação.")
+                servico_relatorios.criar_perfil(contexto, requisicao.user, **formulario.cleaned_data)
+                messages.success(requisicao, "Perfil de exportação salvo para esta empresa.")
+            elif acao == "classificar_dre":
+                formulario = FormularioClassificacaoDre(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_relatorios.ErroRelatorio("Revise a classificação da DRE.")
+                servico_relatorios.salvar_classificacao(contexto, **formulario.cleaned_data)
+                messages.success(requisicao, "Classificação da DRE salva.")
+            elif acao == "gerar":
+                formulario = FormularioGerarRelatorio(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_relatorios.ErroRelatorio("Revise o relatório e o formato selecionados.")
+                conteudo, nome, tipo_conteudo = servico_relatorios.gerar(
+                    contexto, requisicao.user, **formulario.cleaned_data
+                )
+                resposta = HttpResponse(conteudo, content_type=tipo_conteudo)
+                resposta["Content-Disposition"] = f'attachment; filename="{nome}"'
+                return resposta
+            else:
+                raise servico_relatorios.ErroRelatorio("Ação de entrega inválida.")
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de entrega recusada: %s", erro)
+        messages.error(requisicao, str(erro) or "Não foi possível concluir a entrega.")
+    dados = servico_relatorios.carregar(contexto)
+    return render(requisicao, "nucleo/entregas.html", {
+        "titulo_pagina": "Entregas", "secao_ativa": "entregas", "contexto": contexto,
+        "formulario_perfil": FormularioPerfilExportacao(),
+        "formulario_dre": FormularioClassificacaoDre(),
+        "formulario_gerar": FormularioGerarRelatorio(),
+        **dados,
     })
 
 

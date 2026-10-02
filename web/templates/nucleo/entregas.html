@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="apresentacao entradas-apresentacao">
+    <div>
+        <p class="sobretitulo">Saídas verificáveis</p>
+        <h1>Entregas e relatórios</h1>
+        <p class="descricao-pagina">Gere arquivos a partir dos lançamentos aprovados da empresa e competência selecionadas.</p>
+    </div>
+</section>
+
+<section class="grade-entregas">
+    <article class="painel">
+        <header class="painel-cabecalho">
+            <h2 class="titulo-secao">Gerar entrega</h2>
+            <p class="subtitulo-secao">Cada geração registra os parâmetros e a versão de cálculo.</p>
+        </header>
+        <form method="post" class="formulario-entrega">
+            {% csrf_token %}
+            <input type="hidden" name="acao" value="gerar">
+            <div class="campo"><label for="{{ formulario_gerar.tipo_relatorio.id_for_label }}">Relatório</label>{{ formulario_gerar.tipo_relatorio }}</div>
+            <div class="campo"><label for="{{ formulario_gerar.formato.id_for_label }}">Formato</label>{{ formulario_gerar.formato }}</div>
+            <div class="campo"><label for="{{ formulario_gerar.perfil_id.id_for_label }}">Perfil de lançamentos</label>
+                <select name="perfil_id" id="{{ formulario_gerar.perfil_id.id_for_label }}">
+                    <option value="">Contábil genérico</option>
+                    {% for perfil in perfis %}{% if not perfil.padrao %}<option value="{{ perfil.id }}">{{ perfil.nome }}</option>{% endif %}{% endfor %}
+                </select>
+                <small>Aplicado somente à exportação de lançamentos.</small>
+            </div>
+            <button class="botao-primario" type="submit">Gerar arquivo</button>
+        </form>
+        <p class="nota-entrega">O balancete usa saldo anterior, débitos, créditos e saldo final. A DRE mantém contas ainda não classificadas visíveis.</p>
+    </article>
+
+    <article class="painel painel-destaque entregas-destaque">
+        <p class="sobretitulo">Contexto da entrega</p>
+        <h2>{{ contexto.empresa_nome }}</h2>
+        <p>Competência {{ contexto.competencia_exibicao }}. Os números vêm somente de lançamentos aprovados neste contexto.</p>
+        <div class="fluxo-compacto"><span>Dados aprovados</span><i></i><span>Cálculo</span><i></i><span>Arquivo</span></div>
+    </article>
+</section>
+
+<section class="grade-entregas-secundaria">
+    <article class="painel">
+        <header class="painel-cabecalho">
+            <h2 class="titulo-secao">Perfis de exportação</h2>
+            <p class="subtitulo-secao">Defina a ordem dos campos para cada sistema ou rotina.</p>
+        </header>
+        <form method="post" class="formulario-perfil">
+            {% csrf_token %}<input type="hidden" name="acao" value="criar_perfil">
+            <div class="campo"><label for="{{ formulario_perfil.nome.id_for_label }}">Nome</label>{{ formulario_perfil.nome }}</div>
+            <div class="campo campo-largo"><label for="{{ formulario_perfil.campos.id_for_label }}">Campos</label>{{ formulario_perfil.campos }}<small>{{ formulario_perfil.campos.help_text }}</small></div>
+            <button class="botao-secundario" type="submit">Salvar perfil</button>
+        </form>
+        <div class="lista-perfis">
+            {% for perfil in perfis %}<div><strong>{{ perfil.nome }}</strong><small>{{ perfil.campos|join:", " }}</small></div>{% endfor %}
+        </div>
+    </article>
+
+    <article class="painel">
+        <header class="painel-cabecalho">
+            <h2 class="titulo-secao">Plano de classificação da DRE</h2>
+            <p class="subtitulo-secao">A classificação é uma decisão da contadora e vale para a empresa selecionada.</p>
+        </header>
+        <form method="post" class="formulario-dre">
+            {% csrf_token %}<input type="hidden" name="acao" value="classificar_dre">
+            <div class="campo"><label for="{{ formulario_dre.prefixo_conta.id_for_label }}">Prefixo</label>{{ formulario_dre.prefixo_conta }}</div>
+            <div class="campo"><label for="{{ formulario_dre.grupo.id_for_label }}">Grupo</label>{{ formulario_dre.grupo }}</div>
+            <div class="campo"><label for="{{ formulario_dre.categoria.id_for_label }}">Categoria</label>{{ formulario_dre.categoria }}</div>
+            <div class="campo"><label for="{{ formulario_dre.ordem.id_for_label }}">Ordem</label>{{ formulario_dre.ordem }}</div>
+            <button class="botao-secundario" type="submit">Salvar classificação</button>
+        </form>
+        <div class="lista-perfis">
+            {% for item in classificacoes %}<div><strong>{{ item.prefixo_conta }} · {{ item.grupo }}</strong><small>{{ item.get_categoria_display }} · ordem {{ item.ordem }}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhuma classificação foi definida. As contas permanecerão visíveis como não classificadas.</p>{% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="painel secao-entregas">
+    <header class="painel-cabecalho"><h2 class="titulo-secao">Gerações recentes</h2><p class="subtitulo-secao">Histórico reproduzível desta competência.</p></header>
+    <div class="tabela-responsiva"><table class="tabela-entradas"><thead><tr><th>Relatório</th><th>Formato</th><th>Versão</th><th>Gerado em</th><th>Usuária</th></tr></thead><tbody>
+        {% for geracao in geracoes %}<tr><td>{{ geracao.tipo_relatorio|title }}</td><td>{{ geracao.formato|upper }}</td><td>{{ geracao.versao_calculo }}</td><td>{{ geracao.gerado_em|date:"d/m/Y H:i" }}</td><td>{{ geracao.gerado_por|default:"Sistema" }}</td></tr>{% empty %}<tr><td class="celula-vazia" colspan="5">Nenhum relatório foi gerado nesta competência.</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endblock %}

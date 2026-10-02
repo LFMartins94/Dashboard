@@ -86,6 +86,8 @@ A Conciliação está disponível em `/conciliacao/`: ela compara um extrato com
 
 A Auditoria está disponível em `/auditoria/`, com regras reproduzíveis, resolução atribuída à usuária, exportação de exceções e histórico de alterações. A evidência está em `docs/aceitacao_etapa9.md`.
 
+As Entregas estão disponíveis em `/entregas/`. Elas geram balancete com saldo anterior, débitos, créditos e saldo final, DRE agrupada pelo plano de classificação confirmado pela contadora e exportações de lançamentos em perfis genéricos ou personalizados. Excel e PDF não carregam colunas técnicas; toda geração registra contexto, parâmetros e versão do cálculo. A evidência está em `docs/aceitacao_etapa10.md`.
+
 ## Automação por nível de risco
 
 ### Automático

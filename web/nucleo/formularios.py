@@ -5,7 +5,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from .models import EstadoOperacional
+from .models import CategoriaDre, EstadoOperacional
 
 
 class SeletorArquivosMultiplos(forms.ClearableFileInput):
@@ -252,3 +252,28 @@ class FormularioResolucaoAuditoria(forms.Form):
     ocorrencia_id = forms.IntegerField(min_value=1)
     resolvida = forms.BooleanField(required=False)
     justificativa = forms.CharField(max_length=500, required=False)
+
+
+class FormularioPerfilExportacao(forms.Form):
+    nome = forms.CharField(label="Nome do perfil", max_length=80)
+    campos = forms.CharField(
+        label="Campos", max_length=300,
+        help_text="Separe os campos por vírgula. Exemplo: data, conta_contabil, valor, tipo, historico.",
+    )
+
+
+class FormularioClassificacaoDre(forms.Form):
+    prefixo_conta = forms.CharField(label="Prefixo da conta", max_length=50)
+    grupo = forms.CharField(label="Grupo na DRE", max_length=120)
+    categoria = forms.ChoiceField(label="Categoria", choices=CategoriaDre.choices)
+    ordem = forms.IntegerField(label="Ordem", min_value=1, max_value=9999, initial=100)
+
+
+class FormularioGerarRelatorio(forms.Form):
+    tipo_relatorio = forms.ChoiceField(choices=(
+        ("balancete", "Balancete"),
+        ("dre", "DRE"),
+        ("lancamentos", "Lançamentos"),
+    ))
+    formato = forms.ChoiceField(choices=(("xlsx", "Excel"), ("pdf", "PDF")))
+    perfil_id = forms.IntegerField(required=False, min_value=1)

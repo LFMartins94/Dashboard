@@ -297,7 +297,7 @@ Implementação concluída em `docs/aceitacao_etapa9.md`. A migração de histó
 
 ## Etapa 10 — Entregas e relatórios
 
-**Status:** aguardando.
+**Status:** concluída em ambiente local; migração pendente para o corte da Etapa 13.
 
 ### Objetivo
 

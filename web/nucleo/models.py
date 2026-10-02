@@ -375,3 +375,96 @@ class EstadoOcorrenciaAuditoria(models.Model):
                 name="idx_est_aud_contexto",
             ),
         ]
+
+
+class CategoriaDre(models.TextChoices):
+    RECEITA = "receita", "Receita"
+    CUSTO = "custo", "Custo"
+    DESPESA = "despesa", "Despesa"
+    OUTRO = "outro", "Outro"
+
+
+class ClassificacaoDre(models.Model):
+    """Regra confirmada pela contadora para classificar prefixos de conta."""
+
+    empresa_id = models.PositiveIntegerField()
+    prefixo_conta = models.CharField(max_length=50)
+    grupo = models.CharField(max_length=120)
+    categoria = models.CharField(max_length=20, choices=CategoriaDre.choices)
+    ordem = models.PositiveSmallIntegerField(default=100)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_classificacoes_dre"
+        verbose_name = "classificação de DRE"
+        verbose_name_plural = "classificações de DRE"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa_id", "prefixo_conta"], name="uq_dre_empresa_prefixo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_dre_empresa_pos",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["empresa_id", "ordem"], name="idx_dre_empresa_ordem"),
+        ]
+
+
+class PerfilExportacao(models.Model):
+    """Ordem de campos visíveis em uma exportação de lançamentos."""
+
+    empresa_id = models.PositiveIntegerField(null=True, blank=True)
+    nome = models.CharField(max_length=80)
+    campos = models.JSONField(default=list)
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="perfis_exportacao_criados",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "django_perfis_exportacao"
+        verbose_name = "perfil de exportação"
+        verbose_name_plural = "perfis de exportação"
+        indexes = [
+            models.Index(fields=["empresa_id", "nome"], name="idx_perfil_empresa_nome"),
+        ]
+
+
+class GeracaoRelatorio(models.Model):
+    """Registro suficiente para reproduzir uma entrega no mesmo contexto."""
+
+    empresa_id = models.PositiveIntegerField()
+    competencia = models.CharField(max_length=7)
+    tipo_relatorio = models.CharField(max_length=20)
+    formato = models.CharField(max_length=10)
+    parametros = models.JSONField(default=dict)
+    versao_calculo = models.CharField(max_length=20)
+    gerado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="relatorios_gerados",
+    )
+    gerado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "django_geracoes_relatorios"
+        verbose_name = "geração de relatório"
+        verbose_name_plural = "gerações de relatórios"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(empresa_id__gt=0), name="ck_ger_rel_empresa_pos",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    competencia__regex=r"^[0-9]{4}-(0[1-9]|1[0-2])$"
+                ), name="ck_ger_rel_periodo",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "competencia", "gerado_em"],
+                name="idx_ger_rel_contexto",
+            ),
+        ]
