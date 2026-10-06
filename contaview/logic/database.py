@@ -33,6 +33,7 @@ _engine = None
 def _tentar_criar_engine(url: str):
     """Tenta criar engine com uma URL. Retorna engine ou None."""
     try:
+        url_engine = url.replace("postgresql://", "postgresql+psycopg://", 1)
         opcoes = {
             "pool_pre_ping": True,
             "connect_args": {"connect_timeout": 10},
@@ -44,7 +45,7 @@ def _tentar_criar_engine(url: str):
             opcoes["poolclass"] = NullPool
         else:
             opcoes.update(pool_size=5, max_overflow=10, pool_recycle=1800)
-        eng = create_engine(url, **opcoes)
+        eng = create_engine(url_engine, **opcoes)
         # Testa conexao
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
