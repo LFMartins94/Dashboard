@@ -4,11 +4,11 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Estado atual
 
-**Etapa concluída:** Etapa 5 — entrada genérica de arquivos.
+**Etapa concluída:** Etapa 12 — Assistente com consultas agregadas e rastreáveis.
 
-**Etapa em andamento:** nenhuma. A Etapa 6 aguarda autorização do usuário.
+**Etapa em andamento:** Etapa 13 — produção e corte.
 
-**Situação da aplicação nova:** o Django possui login protegido, contexto persistente, tela Trabalho funcional e Entrada genérica operacional. A contadora pode enviar XLSX, XLS e CSV, escolher aba e cabeçalho, revisar a prévia, confirmar o mapeamento e criar um lote de preparação. Conferência, Entregas e Assistente ainda são páginas de espera até suas etapas específicas.
+**Situação da aplicação nova:** todas as etapas de produto foram concluídas e validadas localmente: acesso, contexto, Trabalho, Entradas, Conferência, Conciliação, Auditoria, Entregas, Automações e Assistente. O corte do Django está em execução na Railway e ainda exige validação pública e aceite do ciclo CAP.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
@@ -16,7 +16,9 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 **Banco:** PostgreSQL do Supabase continua sendo a base de produção. Não trocar por SQLite.
 
-**Dados:** o backup nativo foi restaurado e verificado em PostgreSQL local. Nenhuma alteração foi feita nos dados de produção.
+**Dados:** antes do corte foi criado um dump nativo do schema `public` em `temp/corte/` e validado por `pg_restore`. O arquivo temporário não é versionado. As nove migrações Django do núcleo foram aplicadas e as 14 tabelas novas protegidas por RLS foram confirmadas por consulta somente leitura.
+
+**Produção:** o projeto Railway `ContaView`, serviço `contaview-web` e domínio HTTPS `https://contaview-web-production.up.railway.app` foram criados. As variáveis de produção foram configuradas sem expor valores. A conexão direta IPv6 não era roteável pela Railway e foi substituída pelo pool de sessão IPv4 do Supabase. O deploy `b4586a13-1c63-4264-803f-3f587e022c80` está `SUCCESS`; saúde, banco, login, rota protegida e logout foram validados no domínio público.
 
 ## O que já está documentado
 
@@ -39,7 +41,13 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Próxima etapa
 
-**Etapa 6 — Conferência e aprovação do lote.**
+**Etapa 13 — Produção e corte.**
+
+### Pendências para encerrar a Etapa 13
+
+1. Configurar no GitHub o segredo `RAILWAY_TOKEN` e a variável `RAILWAY_DEPLOY_ENABLED=true`; validar o workflow de testes e deploy automático.
+2. Executar, com aceite humano, o ciclo CAP completo: entrada, conferência, aprovação, conciliação, auditoria, relatório e exportação.
+3. Manter o Reflex como fallback até o aceite do ciclo real. A desativação do legado só ocorre depois desse aceite.
 
 ### Evidências da Etapa 1 concluída
 
@@ -148,14 +156,14 @@ Depois deve executar somente a próxima etapa indicada aqui. Ao concluir, atuali
 | 3 | Concluída | Login, sessão, CSRF, limitação de tentativas e contexto validados em 24 testes isolados |
 | 4 | Concluída | Fila operacional, checklist recorrente, próxima ação e 35 testes Django aprovados |
 | 5 | Concluída | Upload, inspeção, prévia, mapeamento, hash e 46 testes Django aprovados |
-| 6 | Aguardando autorização | Conferência, correção e aprovação atômica do lote |
-| 7 | Pendente | Depende da Etapa 6 |
-| 8 | Pendente | Depende da Etapa 7 |
-| 9 | Pendente | Depende da Etapa 8 |
+| 6 | Concluída | Conferência, correção e aprovação atômica do lote validadas localmente |
+| 7 | Concluída | Assistente controlado com conversa, saneamento e limites de contexto |
+| 8 | Concluída | Conciliação determinística e revisões humanas validadas localmente |
+| 9 | Concluída | Auditoria operacional, trilha e resolução de ocorrências validadas localmente |
 | 10 | Concluída | Entregas, relatórios, perfis e registro de geração validados localmente |
 | 11 | Concluída | Automações recorrentes, lembretes, perfis de origem e fila local validados |
 | 12 | Concluída | Assistente com agregados, fontes e rastreabilidade local validados |
-| 13 | Aguardando autorização | Corte, migrações e implantação |
+| 13 | Em andamento | Backup, Railway, variáveis e deploy inicial concluídos; validação pública pendente |
 
 ## Atualização da Etapa 6
 
@@ -184,3 +192,11 @@ Etapa 11 concluída em ambiente local. A rota `/automacoes/` configura documento
 ## Atualização da Etapa 12
 
 Etapa 12 concluída em ambiente local. O Assistente passou a receber somente um resumo agregado, calculado no servidor, de lançamentos aprovados, conciliação, auditoria, checklist e automações da empresa e competência validadas. Nenhuma ferramenta de banco é exposta ao modelo. A tela mostra as fontes que sustentam cada resposta; pergunta saneada, filtros, resposta e fontes ficam registrados em `django_registros_consultas_assistente`. CPFs, CNPJs, e-mails e referências nominais de terceiros são ocultados antes de persistir ou enviar conteúdo à IA. Perguntas de valor sem dados retornam ausência de informação sem chamar o modelo ou estimar números. A migração `0009_registros_consultas_assistente.py` prepara tabela, constraints, índice, RLS e revogação de papéis públicos, mas não foi aplicada em produção. Foram aprovados 70 testes Django e 31 testes legados; a evidência detalhada está em `docs/aceitacao_etapa12.md`. A próxima etapa é a Etapa 13, Corte e implantação, aguardando autorização.
+
+## Atualização da Etapa 13
+
+Etapa 13 iniciada em 03/10/2026. Foi criado o projeto Railway `ContaView`, com o serviço `contaview-web` e domínio HTTPS público. O serviço usa Dockerfile, Gunicorn e variáveis Django configuradas sem registrar segredos no repositório ou terminal. Foi produzido um dump nativo do schema `public` antes do corte e ele foi validado por `pg_restore`.
+
+A Railway não alcançava a conexão direta IPv6 do Supabase. A variável `DATABASE_URL` do serviço foi alterada para o pool de sessão IPv4 e validada por consulta de leitura. As migrações foram aplicadas uma única vez depois do backup; a verificação `scripts/verificar_corte_producao.py` confirmou as 9 migrações do núcleo e 14 tabelas com RLS. A conta administrativa inicial foi criada sem expor credenciais. O deploy `b4586a13-1c63-4264-803f-3f587e022c80` terminou com `SUCCESS`. Os smoke tests públicos confirmaram `/saude/` com banco disponível, formulário de acesso, login, rota protegida, redirecionamento de contexto, logout e bloqueio pós-saída. Os logs Railway registraram os IDs de requisição, por exemplo `d0150bf2-aa98-42cd-ac4c-b041ebea570d` para o login e `6291313f-b293-41ac-b1b5-c16b5ac11574` para a saída bem-sucedida.
+
+O arquivo `railway.json`, o workflow `.github/workflows/validar_e_implantar.yml`, o procedimento `docs/corte_producao.md` e os scripts de backup, configuração e smoke test foram preparados. O workflow aplica migrações de forma explícita antes do deploy e aponta para o projeto e serviço Railway corretos. Ainda falta cadastrar a credencial de deploy no GitHub, executar o ciclo CAP completo com aceite humano e somente depois decidir a retirada do Reflex como fallback.

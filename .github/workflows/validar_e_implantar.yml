@@ -1,0 +1,54 @@
+name: Validar e implantar ContaView
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: npm ci
+      - run: npm run build
+      - run: python web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste
+      - run: python web/manage.py check --settings=configuracao.settings.teste
+      - run: python web/manage.py test nucleo --verbosity 0 --settings=configuracao.settings.teste
+      - run: python -m unittest discover -s tests -q
+
+  implantar:
+    if: github.event_name == 'push' && vars.RAILWAY_DEPLOY_ENABLED == 'true'
+    needs: validar
+    runs-on: ubuntu-latest
+    environment: producao
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: a5d48741-2c86-4663-99e9-92d0025758cf
+      RAILWAY_ENVIRONMENT: production
+      RAILWAY_SERVICE: contaview-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: npm install --global @railway/cli@5.54.1
+      - run: railway run --no-local --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE" -- python web/manage.py migrate --noinput
+      - run: railway up --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$RAILWAY_SERVICE" -m "GitHub ${{ github.sha }}"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

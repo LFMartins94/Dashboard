@@ -18,6 +18,8 @@ if not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS é obrigatória em produção.")
 
 CSRF_TRUSTED_ORIGINS = obter_lista("DJANGO_CSRF_TRUSTED_ORIGINS")  # noqa: F405
+if not CSRF_TRUSTED_ORIGINS:
+    raise ImproperlyConfigured("DJANGO_CSRF_TRUSTED_ORIGINS é obrigatória em produção.")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = obter_booleano("DJANGO_SECURE_SSL_REDIRECT", True)  # noqa: F405
 SESSION_COOKIE_SECURE = True
