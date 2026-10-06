@@ -826,7 +826,7 @@ def assistente(requisicao: HttpRequest) -> HttpResponse:
                 )
     except servico_assistente.ErroAssistente as erro:
         messages.error(requisicao, str(erro))
-    except DatabaseError:
+    except (DatabaseError, RuntimeError):
         logger.exception("Falha de banco no assistente")
         messages.error(requisicao, "Não foi possível carregar o assistente agora.")
     try:
@@ -834,9 +834,12 @@ def assistente(requisicao: HttpRequest) -> HttpResponse:
         if conversa_id is None and conversas:
             conversa_id = int(conversas[0]["id"])
         mensagens = servico_assistente.obter_mensagens(requisicao, conversa_id) if conversa_id else []
-    except (ValueError, DatabaseError) as erro:
+    except (ValueError, DatabaseError, RuntimeError) as erro:
         logger.warning("Conversa indisponível: %s", erro)
-        conversas, mensagens, conversa_id = servico_assistente.listar(requisicao), [], None
+        # Uma indisponibilidade temporária da camada legada de dados não pode
+        # transformar a tela inteira em erro 500. A próxima atualização poderá
+        # carregar as conversas novamente sem perder a sessão do usuário.
+        conversas, mensagens, conversa_id = [], [], None
     return render(requisicao, "nucleo/assistente.html", {
         "titulo_pagina": "Assistente", "secao_ativa": "assistente", "contexto": contexto,
         "conversas": conversas, "mensagens": mensagens, "conversa_id": conversa_id,

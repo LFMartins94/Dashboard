@@ -13,6 +13,7 @@ import logging
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
 
 # ---------------------------------------------------------------------------
 # Configuração de logging
@@ -32,20 +33,28 @@ _engine = None
 def _tentar_criar_engine(url: str):
     """Tenta criar engine com uma URL. Retorna engine ou None."""
     try:
-        eng = create_engine(
-            url,
-            pool_size=5,
-            max_overflow=10,
-            pool_recycle=1800,
-            pool_pre_ping=True,
-        )
+        opcoes = {
+            "pool_pre_ping": True,
+            "connect_args": {"connect_timeout": 10},
+        }
+        if ".pooler.supabase.com" in url:
+            # O pool de sessão já é compartilhado pelo Supabase. Evitar um
+            # segundo pool dentro de cada worker reduz conexões ociosas e
+            # previne esgotamento intermitente no contêiner publicado.
+            opcoes["poolclass"] = NullPool
+        else:
+            opcoes.update(pool_size=5, max_overflow=10, pool_recycle=1800)
+        eng = create_engine(url, **opcoes)
         # Testa conexao
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("Engine do banco criada com sucesso.")
         return eng
-    except Exception:
-        logger.warning("Falha ao conectar ao banco de dados com a configuração recebida.")
+    except Exception as erro:
+        logger.warning(
+            "Falha ao conectar ao banco de dados com a configuração recebida (%s).",
+            type(erro).__name__,
+        )
         return None
 
 
