@@ -22,6 +22,21 @@ class ErroAuditoria(ValueError):
     pass
 
 
+ROTULOS_TIPO_OCORRENCIA = {
+    "DUPLICIDADE": "Duplicidade",
+    "SEM_PAR": "Lançamento sem par",
+    "HISTORICO_VAZIO": "Histórico vazio",
+    "VALOR_ANOMALO": "Valor anômalo",
+    "CONTA_FORMATO_INVALIDO": "Formato de conta inválido",
+}
+
+ROTULOS_SEVERIDADE = {
+    "alta": "Alta",
+    "media": "Média",
+    "baixa": "Baixa",
+}
+
+
 def _validar_contexto(contexto: ContextoTrabalho) -> None:
     if not obter_empresa_ativa(contexto.empresa_id):
         raise ErroAuditoria("A empresa selecionada não está ativa.")
@@ -37,6 +52,15 @@ def _formatar_valor(valor) -> str:
     if valor is None:
         return ""
     return f"R$ {Decimal(str(valor)):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _formatar_tipo_ocorrencia(valor) -> str:
+    codigo = str(valor or "").upper()
+    return ROTULOS_TIPO_OCORRENCIA.get(codigo, codigo.replace("_", " ").capitalize())
+
+
+def _formatar_severidade(valor) -> str:
+    return ROTULOS_SEVERIDADE.get(str(valor or "").lower(), "Baixa")
 
 
 def carregar(contexto: ContextoTrabalho) -> dict:
@@ -55,12 +79,16 @@ def carregar(contexto: ContextoTrabalho) -> dict:
             lancamento_id = None
         estado = estados.get(int(linha["id"]))
         resolvida = bool(estado.resolvida) if estado else bool(linha.get("resolvida"))
+        tipo = str(linha.get("tipo_ocorrencia") or "")
+        severidade = str(linha.get("severidade") or "baixa").lower()
         ocorrencias.append({
             "id": int(linha["id"]),
             "lancamento_id": int(lancamento_id) if lancamento_id is not None else None,
-            "tipo": str(linha.get("tipo_ocorrencia") or ""),
+            "tipo": tipo,
+            "tipo_exibicao": _formatar_tipo_ocorrencia(tipo),
             "descricao": str(linha.get("descricao") or ""),
-            "severidade": str(linha.get("severidade") or "baixa"),
+            "severidade": severidade,
+            "severidade_exibicao": _formatar_severidade(severidade),
             "resolvida": resolvida,
             "data": _formatar_data(linha.get("data")),
             "conta": str(linha.get("conta_contabil") or ""),

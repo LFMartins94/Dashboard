@@ -32,6 +32,8 @@ class AuditoriaServicoTest(TestCase):
         self.assertTrue(estado.resolvida)
         self.assertEqual(estado.resolvida_por, self.usuario)
         self.assertEqual(dados["resolvidas"], 1)
+        self.assertEqual(dados["ocorrencias"][0]["tipo_exibicao"], "Duplicidade")
+        self.assertEqual(dados["ocorrencias"][0]["severidade_exibicao"], "Alta")
         atualizar.assert_called_once_with(7, 31, True)
 
     def test_execucao_relaciona_ocorrencias_ao_lancamento(self):

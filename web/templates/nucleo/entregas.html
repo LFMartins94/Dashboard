@@ -50,7 +50,7 @@
             {% csrf_token %}<input type="hidden" name="acao" value="criar_perfil">
             <div class="campo"><label for="{{ formulario_perfil.nome.id_for_label }}">Nome</label>{{ formulario_perfil.nome }}</div>
             <div class="campo campo-largo"><label for="{{ formulario_perfil.campos.id_for_label }}">Campos</label>{{ formulario_perfil.campos }}<small>{{ formulario_perfil.campos.help_text }}</small></div>
-            <button class="botao-secundario" type="submit">Salvar perfil</button>
+            <button class="botao-primario" type="submit">Salvar perfil</button>
         </form>
         <div class="lista-perfis">
             {% for perfil in perfis %}<div><strong>{{ perfil.nome }}</strong><small>{{ perfil.campos|join:", " }}</small></div>{% endfor %}
@@ -68,7 +68,7 @@
             <div class="campo"><label for="{{ formulario_dre.grupo.id_for_label }}">Grupo</label>{{ formulario_dre.grupo }}</div>
             <div class="campo"><label for="{{ formulario_dre.categoria.id_for_label }}">Categoria</label>{{ formulario_dre.categoria }}</div>
             <div class="campo"><label for="{{ formulario_dre.ordem.id_for_label }}">Ordem</label>{{ formulario_dre.ordem }}</div>
-            <button class="botao-secundario" type="submit">Salvar classificação</button>
+            <button class="botao-primario" type="submit">Salvar classificação</button>
         </form>
         <div class="lista-perfis">
             {% for item in classificacoes %}<div><strong>{{ item.prefixo_conta }} · {{ item.grupo }}</strong><small>{{ item.get_categoria_display }} · ordem {{ item.ordem }}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhuma classificação foi definida. As contas permanecerão visíveis como não classificadas.</p>{% endfor %}

@@ -104,7 +104,7 @@
                 <div class="caminho"><span>ContaView</span><span>/</span><strong>{{ titulo_pagina|default:"Trabalho" }}</strong></div>
                 <div class="acoes-cabecalho">
                     {% if contexto_atual %}
-                        <a class="contexto-cabecalho" href="{% url 'nucleo:selecionar_contexto' %}">
+                        <a class="contexto-cabecalho{% if secao_ativa == 'conciliacao' %} contexto-conciliacao{% endif %}" href="{% url 'nucleo:selecionar_contexto' %}">
                             <span>{{ contexto_atual.empresa_nome }}</span>
                             <strong>{{ contexto_atual.competencia_exibicao }}</strong>
                         </a>

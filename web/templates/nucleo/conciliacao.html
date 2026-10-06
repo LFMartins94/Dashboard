@@ -1,11 +1,43 @@
 {% extends "base.html" %}
 {% block conteudo %}
-<section class="cabecalho-pagina"><div><span class="sobretitulo">Cruzamento determinístico</span><h1>Conciliação</h1><p>Compare um extrato com outro lote da mesma empresa e competência. Ambiguidades sempre exigem decisão humana.</p></div></section>
+<section class="cabecalho-pagina">
+  <div>
+    <span class="sobretitulo">Cruzamento determinístico</span>
+    <h1>Conciliação</h1>
+    <p>Compare um extrato com outra fonte da empresa e competência atuais. Ambiguidades sempre exigem decisão humana.</p>
+  </div>
+</section>
 
-<section class="cartao"><form method="post" class="formulario-linha">{% csrf_token %}<input type="hidden" name="acao" value="executar"><label>Extrato<select name="lote_extrato_id" required><option value="">Selecione</option>{% for lote in lotes %}{% if lote.tipo_documento == 'extrato' %}<option value="{{ lote.id }}"{% if extrato and lote.id == extrato.id %} selected{% endif %}>{{ lote.nome_arquivo }} · {{ lote.total_linhas }} linhas</option>{% endif %}{% endfor %}</select></label><label>Referência<select name="lote_referencia_id" required><option value="">Selecione</option><option value="0"{% if referencia and referencia.id == 0 %} selected{% endif %}>Lançamentos aprovados da competência</option>{% for lote in lotes %}<option value="{{ lote.id }}"{% if referencia and lote.id == referencia.id %} selected{% endif %}>{{ lote.nome_arquivo }} · {{ lote.total_linhas }} linhas</option>{% endfor %}</select></label><button class="botao primario" type="submit">Executar conciliação</button></form></section>
+<section class="cartao painel-conciliacao">
+  <div class="cartao-cabecalho"><div><h2>Escolha as fontes</h2><p>O sistema só confirma pares com valor, data, descrição e conta compatíveis.</p></div></div>
+  <form method="post" class="formulario-conciliacao">
+    {% csrf_token %}<input type="hidden" name="acao" value="executar">
+    <div class="campo">
+      <label for="lote-extrato">Extrato bancário</label>
+      <select id="lote-extrato" name="lote_extrato_id" required>
+        <option value="">Selecione o extrato</option>
+        {% for lote in lotes %}{% if lote.tipo_documento == 'extrato' %}<option value="{{ lote.id }}"{% if extrato and lote.id == extrato.id %} selected{% endif %}>{{ lote.nome_arquivo }} · {{ lote.total_linhas }} linhas</option>{% endif %}{% endfor %}
+      </select>
+      <small>Use um lote classificado como extrato bancário.</small>
+    </div>
+    <div class="campo">
+      <label for="lote-referencia">Referência para comparação</label>
+      <select id="lote-referencia" name="lote_referencia_id" required>
+        <option value="">Selecione a referência</option>
+        <option value="0"{% if referencia and referencia.id == 0 %} selected{% endif %}>Lançamentos aprovados da competência</option>
+        {% for lote in lotes %}<option value="{{ lote.id }}"{% if referencia and lote.id == referencia.id %} selected{% endif %}>{{ lote.nome_arquivo }} · {{ lote.total_linhas }} linhas</option>{% endfor %}
+      </select>
+      <small>Escolha os lançamentos aprovados ou outro lote preparado.</small>
+    </div>
+    <div class="acao-conciliacao">
+      <button class="botao primario" type="submit">Executar conciliação</button>
+      <small>Nenhuma decisão ambígua é tomada automaticamente.</small>
+    </div>
+  </form>
+</section>
 
 {% if resultado %}
-<section class="grade-kpis" style="margin-top:1rem"><div class="cartao-kpi"><span>Pares exatos</span><strong>{{ resultado.pares_confirmados|length }}</strong></div><div class="cartao-kpi"><span>Revisões confirmadas</span><strong>{{ resultado.revisoes_confirmadas }}</strong></div><div class="cartao-kpi alerta"><span>Revisões pendentes</span><strong>{{ resultado.revisoes_pendentes }}</strong></div><div class="cartao-kpi alerta"><span>Sem correspondência</span><strong>{{ resultado.sem_correspondencia_total }}</strong></div></section>
+<section class="grade-kpis grade-kpis-conciliacao"><div class="cartao-kpi"><span>Pares exatos</span><strong>{{ resultado.pares_confirmados|length }}</strong><small>Confirmados pelas regras</small></div><div class="cartao-kpi prioridade-resolvida"><span>Revisões confirmadas</span><strong>{{ resultado.revisoes_confirmadas }}</strong><small>Decididas manualmente</small></div><div class="cartao-kpi prioridade-media"><span>Revisões pendentes</span><strong>{{ resultado.revisoes_pendentes }}</strong><small>Aguardam conferência</small></div><div class="cartao-kpi prioridade-alta"><span>Sem correspondência</span><strong>{{ resultado.sem_correspondencia_total }}</strong><small>Sem par encontrado</small></div></section>
 
 <section class="cartao" style="margin-top:1rem"><div class="cartao-cabecalho"><div><h2>Pares confirmados automaticamente</h2><p>Mesmo valor, data, descrição e conta, com cardinalidade única.</p></div></div><div class="lista-resultados">{% for item in resultado.pares_confirmados|slice:':100' %}<div><span>Linhas {{ item.linha_extrato }} e {{ item.linha_referencia }}</span><strong>R$ {{ item.valor }}</strong><small>{{ item.data }} · {{ item.descricao }}</small></div>{% empty %}<p class="texto-auxiliar">Nenhum par exato encontrado.</p>{% endfor %}</div></section>
 
@@ -14,5 +46,10 @@
 <section class="cartao" style="margin-top:1rem"><div class="cartao-cabecalho"><div><h2>Divergências de valor</h2><p>Descrição semelhante, mas valores diferentes. Exigem ajuste ou rejeição.</p></div></div>{% for item in resultado.divergencias_valor|slice:':100' %}<article class="revisao-conciliacao"><div><strong>Linhas {{ item.linha_extrato }} e {{ item.linha_referencia }}</strong><span>Extrato R$ {{ item.valor_extrato }} · Referência R$ {{ item.valor_referencia }}</span></div>{% if item.decisao %}<span class="etiqueta alerta">{{ item.decisao }}</span>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="decidir"><input type="hidden" name="lote_extrato_id" value="{{ extrato.id }}"><input type="hidden" name="lote_referencia_id" value="{{ referencia.id }}"><input type="hidden" name="linha_extrato_id" value="{{ item.extrato_id }}"><input type="hidden" name="linha_referencia_id" value="{{ item.referencia_id }}"><input name="justificativa" maxlength="500" placeholder="Justificativa"><button class="botao pequeno" name="decisao" value="manual" type="submit">Registrar ajuste</button><button class="botao pequeno" name="decisao" value="rejeitada" type="submit">Rejeitar</button></form>{% endif %}</article>{% empty %}<p class="texto-auxiliar">Não há divergências de valor.</p>{% endfor %}</section>
 
 <section class="cartao" style="margin-top:1rem"><div class="cartao-cabecalho"><div><h2>Sem correspondência</h2><p>Linhas que não encontraram par nem candidato.</p></div></div><p>{{ resultado.faltantes_extrato|length }} linha(s) sem par no extrato e {{ resultado.faltantes_referencia|length }} na referência.</p></section>
+{% else %}
+<section class="cartao estado-inicial-conciliacao">
+  <h2>Pronta para iniciar o cruzamento</h2>
+  <p>Selecione o extrato e a referência acima. Os resultados aparecerão aqui, separados entre pares confirmados, itens para revisão e divergências.</p>
+</section>
 {% endif %}
 {% endblock %}

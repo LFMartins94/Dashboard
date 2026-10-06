@@ -44,6 +44,18 @@
       Os valores são calculados no servidor a partir de fontes identificadas abaixo de cada resposta. O assistente não altera lançamentos, lotes ou ocorrências.
     </div>
 
+    <form method="post" class="formulario-chat" aria-label="Enviar pergunta ao Assistente">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="mensagem">
+      <input type="hidden" name="conversa_id" value="{{ conversa_id|default:'' }}">
+      <label class="rotulo-pergunta" for="pergunta-assistente">Sua pergunta</label>
+      <textarea id="pergunta-assistente" name="conteudo" rows="3" maxlength="4000" placeholder="Exemplo: Há pendências de auditoria nesta competência?" required></textarea>
+      <div class="rodape-chat">
+        <small>Não envie CPFs, CNPJs, e-mails ou dados nominais de terceiros.</small>
+        <button class="botao primario" type="submit">Enviar pergunta</button>
+      </div>
+    </form>
+
     <div class="mensagens-chat" aria-live="polite">
       {% for mensagem in mensagens %}
         <article class="mensagem-chat {{ mensagem.role }}">
@@ -68,16 +80,6 @@
       {% endfor %}
     </div>
 
-    <form method="post" class="formulario-chat">
-      {% csrf_token %}
-      <input type="hidden" name="acao" value="mensagem">
-      <input type="hidden" name="conversa_id" value="{{ conversa_id|default:'' }}">
-      <textarea name="conteudo" rows="3" maxlength="4000" placeholder="Escreva sua dúvida contábil..." required></textarea>
-      <div class="rodape-chat">
-        <small>Não envie CPFs, CNPJs, e-mails ou dados nominais de terceiros.</small>
-        <button class="botao primario" type="submit">Enviar mensagem</button>
-      </div>
-    </form>
   </section>
 </div>
 {% endblock %}
