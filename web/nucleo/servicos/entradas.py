@@ -27,7 +27,7 @@ from ..models import (
 from .contexto import ContextoTrabalho, obter_empresa_ativa
 from .automacoes import identificar_perfil_origem, registrar_processamento_concluido
 
-EXTENSOES_PERMITIDAS = {"xlsx", "xls", "csv"}
+EXTENSOES_PERMITIDAS = {"xlsx", "xls", "csv", "ofx"}
 LIMITE_BYTES = 20 * 1024 * 1024
 LIMITE_XLSX_DESCOMPACTADO = 100 * 1024 * 1024
 LIMITE_MEMBROS_XLSX = 1_000
@@ -76,7 +76,7 @@ def _validar_conteudo(nome: str, conteudo: bytes) -> str:
     extensao = Path(nome).suffix.lower().lstrip(".")
     if extensao not in EXTENSOES_PERMITIDAS:
         raise ErroEntrada(
-            f"Arquivo {nome}: extensão inválida. Use XLSX, XLS ou CSV."
+            f"Arquivo {nome}: extensão inválida. Use OFX, XLSX, XLS ou CSV."
         )
     if not conteudo:
         raise ErroEntrada(f"Arquivo {nome}: o arquivo está vazio.")
@@ -107,6 +107,8 @@ def _validar_conteudo(nome: str, conteudo: bytes) -> str:
         raise ErroEntrada(f"Arquivo {nome}: o conteúdo não é um XLS válido.")
     elif extensao == "csv" and b"\x00" in conteudo[:8192]:
         raise ErroEntrada(f"Arquivo {nome}: o CSV contém dados binários inválidos.")
+    elif extensao == "ofx" and b"<OFX" not in conteudo.upper():
+        raise ErroEntrada(f"Arquivo {nome}: o conteúdo não é um OFX válido.")
     return extensao
 
 
@@ -119,7 +121,7 @@ def _texto_json(valor) -> str:
 
 
 def resumir_inspecao(resultado: dict) -> dict:
-    return {
+    resumo = {
         "abas": [
             {
                 "nome": aba["nome"],
@@ -140,6 +142,13 @@ def resumir_inspecao(resultado: dict) -> dict:
             for aba in resultado["abas"]
         ]
     }
+    if resultado.get("metadados_origem"):
+        resumo["metadados_origem"] = {
+            chave: _texto_json(valor)
+            if not isinstance(valor, list) else [_texto_json(item) for item in valor]
+            for chave, valor in resultado["metadados_origem"].items()
+        }
+    return resumo
 
 
 def _existe_lote_final(empresa_id: int, arquivo_sha256: str) -> tuple | None:
@@ -262,11 +271,15 @@ def inspecionar_selecao(
     if not aba:
         raise ErroEntrada(f"Aba {nome_aba}: a aba selecionada não foi encontrada.")
     assinatura = assinatura_estrutura(aba)
-    modelo = ModeloMapeamentoEntrada.objects.filter(
+    modelos = ModeloMapeamentoEntrada.objects.filter(
         empresa_id=arquivo.empresa_id,
         assinatura_estrutura=assinatura,
         tipo_documento=tipo_documento,
-    ).first()
+    )
+    if arquivo.perfil_origem_id:
+        modelo = modelos.filter(perfil_origem_id=arquivo.perfil_origem_id).first()
+    else:
+        modelo = modelos.filter(perfil_origem__isnull=True).first()
     if modelo:
         sugestao = {
             campo: coluna for campo, coluna in modelo.mapeamento.items()
@@ -320,6 +333,10 @@ def confirmar_preparacao(
             contexto.competencia,
             mapeamento_limpo,
             linha_cabecalho,
+            validar_periodo=(
+                not bloqueado.perfil_origem
+                or bloqueado.perfil_origem.regra_competencia == "restrita"
+            ),
         )
     except SQLAlchemyError as erro:
         raise ErroEntrada(
@@ -330,6 +347,7 @@ def confirmar_preparacao(
 
     modelo, criado = ModeloMapeamentoEntrada.objects.update_or_create(
         empresa_id=contexto.empresa_id,
+        perfil_origem=bloqueado.perfil_origem,
         assinatura_estrutura=selecao.assinatura,
         tipo_documento=tipo_documento,
         defaults={

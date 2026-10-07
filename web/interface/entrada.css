@@ -201,6 +201,8 @@ svg { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: 
 .sobretitulo { margin: 0 0 9px; color: var(--acento); font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weight: 700; letter-spacing: -.055em; line-height: 1.06; }
 .descricao-pagina { max-width: 680px; margin: 12px 0 0; color: var(--tinta-suave); font-size: 14px; line-height: 1.6; }
+.aviso-origem { max-width: 680px; margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--acento); color: var(--tinta-suave); background: var(--acento-suave); font-size: 12px; line-height: 1.55; }
+.aviso-origem strong { color: var(--tinta); }
 .botao-primario, .botao-secundario {
     display: inline-flex;
     align-items: center;
@@ -586,7 +588,8 @@ h1 { max-width: 780px; margin: 0; font-size: clamp(29px, 3.2vw, 42px); font-weig
 @media (max-width:560px) { .formulario-entrega,.formulario-dre { grid-template-columns:1fr; } .formulario-entrega .botao-primario,.formulario-perfil .botao-primario,.formulario-dre .botao-primario { width:100%; justify-self:stretch; } }
 .grade-automacoes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin-bottom:20px; }
 .formulario-automacao { display:grid; grid-template-columns:minmax(180px,1fr) minmax(130px,.65fr) minmax(110px,.45fr) auto auto; gap:12px; align-items:end; padding:20px; }
-.formulario-origem { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:12px; align-items:end; padding:20px; }
+.formulario-origem { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:end; padding:20px; }
+.formulario-origem .botao-secundario { justify-self:start; }
 .campo-opcao { min-height:39px; grid-template-columns:auto 1fr; align-items:center; gap:7px; padding-bottom:9px; }
 .campo-opcao input { width:auto; min-height:auto; }
 .lista-lembretes,.lista-tarefas { display:grid; }

@@ -218,6 +218,7 @@ def salvar_preparacao_confirmada(
     arquivo: BinaryIO, empresa_id: int, nome_aba: str,
     tipo_documento: str, periodo: str | None,
     mapeamento: dict[str, str], linha_cabecalho: int | None = None,
+    validar_periodo: bool = True,
 ) -> dict:
     """Confirma uma prévia para uma empresa previamente validada pela aplicação.
 
@@ -256,7 +257,8 @@ def salvar_preparacao_confirmada(
         campo: coluna for campo, coluna in mapeamento.items() if coluna
     }
     linhas = preparar_linhas_mapeadas(
-        aba["linhas"], mapeamento_limpo, tipo_documento, periodo
+        aba["linhas"], mapeamento_limpo, tipo_documento,
+        periodo if validar_periodo else None,
     )
     salvo = salvar_lote_preparacao(
         empresa_id,

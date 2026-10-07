@@ -95,19 +95,26 @@ def criar_modelo_documento(
 @transaction.atomic
 def criar_perfil_origem(
     contexto: ContextoTrabalho, nome: str, prefixo_nome: str,
-    pasta_referencia: str, tipo_documento: str,
+    pasta_referencia: str, tipo_documento: str, modo: str,
+    regra_competencia: str,
 ) -> PerfilOrigemEntrada:
     _validar_contexto(contexto)
     if not nome.strip() or not prefixo_nome.strip():
         raise ErroAutomacao("Informe o nome e o prefixo do perfil de origem.")
     if tipo_documento not in {"extrato", "folha", "notas", "lancamentos", "outro"}:
         raise ErroAutomacao("Tipo de documento inválido.")
+    if modo not in {"transacional", "contabil_estruturado"}:
+        raise ErroAutomacao("Modo de origem inválido.")
+    if regra_competencia not in {"restrita", "ampliada", "livre"}:
+        raise ErroAutomacao("Regra de competência inválida.")
     perfil, _ = PerfilOrigemEntrada.objects.update_or_create(
         empresa_id=contexto.empresa_id, nome=nome.strip(),
         defaults={
             "prefixo_nome": prefixo_nome.strip(),
             "pasta_referencia": pasta_referencia.strip(),
             "tipo_documento": tipo_documento,
+            "modo": modo,
+            "regra_competencia": regra_competencia,
             "ativo": True,
         },
     )

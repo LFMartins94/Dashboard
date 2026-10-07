@@ -4,7 +4,7 @@ Ferramenta web para reduzir o trabalho manual de uma contadora que administra v�
 
 O ContaView recebe arquivos contábeis de origens diferentes, preserva os dados originais, prepara lançamentos, apresenta exceções para revisão humana, executa conciliação determinística e gera arquivos e relatórios para o sistema contábil utilizado pela empresa.
 
-O projeto não substitui o sistema contábil oficial. Ele funciona como uma camada de preparação, conferência, automação e entrega, independente de Domínio, Alterdata ou qualquer outro fornecedor.
+O projeto não substitui o sistema contábil oficial. Ele funciona como uma camada de preparação, conferência, automação e entrega, independente de fornecedor. O cenário atual aponta para Senior como sistema contábil e eSolution como provável origem operacional, ambos ainda sujeitos à confirmação da contadora.
 
 ## Direção arquitetural
 
@@ -51,6 +51,7 @@ O início de uma competência e cada mudança de estado usam requisições `POST
 
 O importador não é específico da planilha CAP. A primeira versão aceita:
 
+- OFX, com identificação da transação preservada quando fornecida pelo banco.
 - XLSX, incluindo múltiplas abas.
 - XLS binário e XML Spreadsheet legado quando o leitor conseguir processá-los.
 - CSV com separadores `;`, `,`, tabulação ou `|`.
@@ -58,7 +59,7 @@ O importador não é específico da planilha CAP. A primeira versão aceita:
 
 O sistema identifica possíveis campos como data, valor, descrição, tipo, conta contábil e filial. Nomes diferentes podem representar o mesmo campo. O sistema sugere o mapeamento, mostra uma prévia e exige confirmação antes da gravação.
 
-Quando a estrutura é nova ou ambígua, a contadora corrige o mapeamento manualmente. O modelo aprovado fica salvo para reutilização futura. Arquivos protegidos por senha, PDFs, imagens, OFX e XML contábil exigem leitores próprios e entram em etapas posteriores.
+Quando a estrutura é nova ou ambígua, a contadora corrige o mapeamento manualmente. O modelo aprovado fica salvo para reutilização futura. Arquivos protegidos por senha, PDFs, imagens e XML contábil exigem leitores próprios e entram em etapas posteriores. PDF estruturado será usado somente quando não houver CSV, XLSX ou OFX disponível.
 
 A IA pode sugerir a relação entre nomes de colunas. Ela nunca escolhe sozinha a empresa, o tipo de documento, a competência ou o destino dos dados.
 
@@ -75,10 +76,11 @@ A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e pre
 - sugere data, valor, descrição, tipo, conta e filial com regras locais;
 - oferece sugestão por IA somente quando data e valor não foram identificados localmente, enviando apenas os nomes das colunas;
 - preserva todas as colunas originais em `dados_brutos`;
-- salva o mapeamento confirmado para estruturas futuras;
+- salva o mapeamento confirmado por empresa, perfil de origem e estrutura para reutilização futura;
+- aceita OFX e preserva o identificador da transação, a conta e os totais informados pela origem;
 - grava o arquivo final em `lotes_importacao` e as linhas em `linhas_preparadas`.
 
-O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas são feitas na tela de Conferência. A evidência está em `docs/aceitacao_etapa6.md`.
+O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas são feitas na tela de Conferência. O perfil de origem define se a fonte é transacional, para classificação assistida posterior, ou contábil estruturada, para validação sem reclassificação. A evidência está em `docs/aceitacao_etapa6.md`.
 
 O Assistente está disponível em `/assistente/` para consultas controladas. O servidor calcula lançamentos, conciliação, auditoria, checklist e automações no contexto selecionado e envia à IA somente totais, contagens e estados agregados. Cada resposta mostra as fontes consultadas e registra pergunta, filtros, resposta e fontes para rastreabilidade. CPFs, CNPJs, e-mails e referências nominais de terceiros são ocultados antes da persistência e da chamada à IA. O Assistente não executa alterações contábeis. A evidência está em `docs/aceitacao_etapa12.md`.
 
@@ -168,7 +170,7 @@ Depois que as migrações forem executadas no ambiente de destino, crie o primei
 
 A senha é solicitada sem aparecer no comando nem no histórico do terminal. Em automação, use `DJANGO_ADMIN_PASSWORD` apenas como variável temporária e remova-a ao terminar.
 
-As migrações Django ainda não devem ser executadas no PostgreSQL de produção. Elas serão aplicadas na Etapa 13, depois de novo backup e da confirmação do ambiente de corte. Até lá, o fluxo completo de autenticação é verificado pela suíte isolada:
+As migrações 0001 a 0009 foram aplicadas no PostgreSQL de produção durante a Etapa 13, após backup confirmado. Migrações posteriores exigem backup, testes isolados, deploy controlado e verificação de RLS. A suíte isolada continua sendo o primeiro controle de regressão:
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
@@ -204,6 +206,7 @@ A nova implementação fica em `web/`. O legado permanece congelado durante a tr
 - [`AGENTS.md`](AGENTS.md): regras para agentes e limites da transição.
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md): tokens e regras visuais que serão reaproveitados na interface HTML.
 - [`docs/PROMPTS_ETAPAS.md`](docs/PROMPTS_ETAPAS.md): documento histórico do Reflex; não é o plano vigente.
+- [`docs/plano_contaview_3_1.md`](docs/plano_contaview_3_1.md): plano do produto orientado ao fluxo de extrato, classificação assistida e exportação ao sistema oficial.
 - [`docs/inventario_etapa1.md`](docs/inventario_etapa1.md): fotografia somente leitura do banco para a Etapa 1.
 - [`docs/catalogo_logic_etapa1.md`](docs/catalogo_logic_etapa1.md): catálogo dos módulos Python reutilizáveis.
 - [`docs/aceitacao_etapa1.md`](docs/aceitacao_etapa1.md): arquivos e critérios do primeiro ciclo de aceite.

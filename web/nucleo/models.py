@@ -167,6 +167,17 @@ class EstadoArquivoEntrada(models.TextChoices):
     DESCARTADO = "descartado", "Descartado"
 
 
+class ModoPerfilOrigemEntrada(models.TextChoices):
+    TRANSACIONAL = "transacional", "Transacional"
+    CONTABIL_ESTRUTURADO = "contabil_estruturado", "Contábil estruturado"
+
+
+class RegraCompetenciaOrigem(models.TextChoices):
+    RESTRITA = "restrita", "Restrita à competência"
+    AMPLIADA = "ampliada", "Competência ampliada"
+    LIVRE = "livre", "Sem bloqueio de competência"
+
+
 class ArquivoEntradaTemporario(models.Model):
     """Arquivo preservado enquanto a contadora confirma como interpretá-lo."""
 
@@ -214,7 +225,7 @@ class ArquivoEntradaTemporario(models.Model):
                 name="ck_arq_ent_periodo",
             ),
             models.CheckConstraint(
-                condition=models.Q(extensao__in=("xlsx", "xls", "csv")),
+                condition=models.Q(extensao__in=("xlsx", "xls", "csv", "ofx")),
                 name="ck_arq_ent_extensao",
             ),
             models.CheckConstraint(
@@ -251,6 +262,13 @@ class ModeloMapeamentoEntrada(models.Model):
         on_delete=models.SET_NULL,
         related_name="modelos_mapeamento_confirmados",
     )
+    perfil_origem = models.ForeignKey(
+        "PerfilOrigemEntrada",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="modelos_mapeamento",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -261,7 +279,16 @@ class ModeloMapeamentoEntrada(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["empresa_id", "assinatura_estrutura", "tipo_documento"],
-                name="uq_mod_map_empresa_estrutura_tipo",
+                condition=models.Q(perfil_origem__isnull=True),
+                name="uq_mod_map_empresa_estrutura_tipo_generico",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "empresa_id", "perfil_origem", "assinatura_estrutura",
+                    "tipo_documento",
+                ],
+                condition=models.Q(perfil_origem__isnull=False),
+                name="uq_mod_map_empresa_perfil_estrutura_tipo",
             ),
             models.CheckConstraint(
                 condition=models.Q(empresa_id__gt=0), name="ck_mod_map_empresa_pos"
@@ -514,6 +541,16 @@ class PerfilOrigemEntrada(models.Model):
     prefixo_nome = models.CharField(max_length=80)
     pasta_referencia = models.CharField(max_length=255, blank=True)
     tipo_documento = models.CharField(max_length=20, default="outro")
+    modo = models.CharField(
+        max_length=25,
+        choices=ModoPerfilOrigemEntrada.choices,
+        default=ModoPerfilOrigemEntrada.TRANSACIONAL,
+    )
+    regra_competencia = models.CharField(
+        max_length=12,
+        choices=RegraCompetenciaOrigem.choices,
+        default=RegraCompetenciaOrigem.RESTRITA,
+    )
     ativo = models.BooleanField(default=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 

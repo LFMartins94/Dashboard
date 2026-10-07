@@ -27,6 +27,7 @@ import csv
 import logging
 import re
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, BinaryIO
 
 import pandas as pd
@@ -1408,6 +1409,113 @@ def _organizar_aba_previa(
     }
 
 
+def _campo_ofx(bloco: str, nome: str) -> str:
+    encontrado = re.search(
+        rf"<{nome}>([^<\r\n]*)", bloco, flags=re.IGNORECASE,
+    )
+    return encontrado.group(1).strip() if encontrado else ""
+
+
+def _data_ofx(texto: str) -> str:
+    encontrado = re.match(r"(\d{4})(\d{2})(\d{2})", texto.strip())
+    if not encontrado:
+        return ""
+    try:
+        return date(*map(int, encontrado.groups())).strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
+
+
+def _valor_ofx(texto: str) -> Decimal | None:
+    try:
+        valor = Decimal(texto.strip().replace(",", "."))
+        return valor if valor.is_finite() else None
+    except (InvalidOperation, AttributeError):
+        return None
+
+
+def inspecionar_ofx(conteudo: bytes) -> dict:
+    """Lê OFX 1.x e 2.x sem classificar nem alterar as transações."""
+    texto = ""
+    for codificacao in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            texto = conteudo.decode(codificacao)
+            break
+        except UnicodeDecodeError:
+            continue
+    if not texto or "<OFX" not in texto.upper():
+        return {"sucesso": False, "erro": "O conteúdo não corresponde a um OFX válido."}
+
+    transacoes = re.findall(r"<STMTTRN>(.*?)(?:</STMTTRN>|(?=<STMTTRN>|<LEDGERBAL>|</BANKTRANLIST>))", texto, flags=re.IGNORECASE | re.DOTALL)
+    if not transacoes:
+        return {"sucesso": False, "erro": "O OFX não contém transações bancárias."}
+
+    registros = []
+    identificadores: set[str] = set()
+    identificadores_duplicados: list[str] = []
+    entradas = Decimal("0")
+    saidas = Decimal("0")
+    for numero, bloco in enumerate(transacoes, start=2):
+        identificador = _campo_ofx(bloco, "FITID")
+        if identificador and identificador in identificadores:
+            identificadores_duplicados.append(identificador)
+        identificadores.add(identificador)
+        valor = _valor_ofx(_campo_ofx(bloco, "TRNAMT"))
+        if valor is None:
+            continue
+        if valor >= 0:
+            entradas += valor
+            tipo = "C"
+        else:
+            saidas += abs(valor)
+            tipo = "D"
+        descricao = " ".join(
+            parte for parte in (_campo_ofx(bloco, "NAME"), _campo_ofx(bloco, "MEMO"))
+            if parte
+        )
+        registros.append({
+            "numero_linha": numero,
+            "valores": {
+                "Data": _data_ofx(_campo_ofx(bloco, "DTPOSTED")),
+                "Valor": f"{abs(valor):.2f}".replace(".", ","),
+                "Descrição": descricao,
+                "Tipo": tipo,
+                "Identificador OFX": identificador,
+                "Tipo da transação": _campo_ofx(bloco, "TRNTYPE"),
+            },
+        })
+    if not registros:
+        return {"sucesso": False, "erro": "O OFX não contém valores financeiros válidos."}
+
+    saldo_final = _valor_ofx(_campo_ofx(texto, "BALAMT"))
+    # O OFX bancário usualmente informa somente o saldo final. Não é seguro
+    # considerar um segundo BALAMT como saldo inicial sem contrato da origem.
+    saldo_inicial = None
+    saldo_confere = None
+    metadados = {
+        "formato": "ofx",
+        "conta_bancaria": _campo_ofx(texto, "ACCTID"),
+        "total_entradas": str(entradas.quantize(Decimal("0.01"))),
+        "total_saidas": str(saidas.quantize(Decimal("0.01"))),
+        "saldo_inicial": str(saldo_inicial) if saldo_inicial is not None else "",
+        "saldo_final": str(saldo_final) if saldo_final is not None else "",
+        "saldo_confere": saldo_confere,
+        "saldo_inicial_disponivel": False,
+        "identificadores_duplicados": identificadores_duplicados[:20],
+    }
+    return {
+        "sucesso": True,
+        "abas": [{
+            "nome": "OFX",
+            "linha_cabecalho": 1,
+            "cabecalhos": ["Data", "Valor", "Descrição", "Tipo", "Identificador OFX", "Tipo da transação"],
+            "linhas": registros,
+            "total_linhas": len(registros),
+        }],
+        "metadados_origem": metadados,
+    }
+
+
 def inspecionar_planilha(
     arquivo: BinaryIO, linha_cabecalho: int | None = None,
     aba_alvo: str | None = None,
@@ -1415,8 +1523,8 @@ def inspecionar_planilha(
     """Lê a estrutura original para prévia sem presumir destino contábil."""
     nome = getattr(arquivo, "name", "arquivo")
     extensao = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
-    if extensao not in ("xlsx", "csv", "xls"):
-        return {"sucesso": False, "erro": "Formato não suportado. Use XLSX, CSV ou XLS XML."}
+    if extensao not in ("xlsx", "csv", "xls", "ofx"):
+        return {"sucesso": False, "erro": "Formato não suportado. Use OFX, XLSX, CSV ou XLS XML."}
 
     conteudo = arquivo.read()
     arquivo.seek(0)
@@ -1425,6 +1533,8 @@ def inspecionar_planilha(
 
     abas_brutas: list[tuple[str, list[list[Any]]]] = []
     try:
+        if extensao == "ofx":
+            return inspecionar_ofx(conteudo)
         if extensao == "xlsx":
             pasta = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
             try:

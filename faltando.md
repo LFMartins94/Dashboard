@@ -8,7 +8,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 **Etapa em andamento:** Etapa 13 — produção e corte.
 
-**Situação da aplicação nova:** todas as etapas de produto foram concluídas e validadas localmente: acesso, contexto, Trabalho, Entradas, Conferência, Conciliação, Auditoria, Entregas, Automações e Assistente. O corte do Django está em execução na Railway e ainda exige validação pública e aceite do ciclo CAP.
+**Situação da aplicação nova:** todas as etapas de produto originais foram concluídas e validadas localmente: acesso, contexto, Trabalho, Entradas, Conferência, Conciliação, Auditoria, Entregas, Automações e Assistente. O Django está publicado na Railway. O corte ainda exige aceite humano do ciclo CAP; em paralelo, iniciou-se a Fase 1 técnica do Plano ContaView 3.1.
 
 **Situação do código legado:** a aplicação Reflex continua publicada como referência temporária e permanece congelada.
 
@@ -27,7 +27,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Supabase PostgreSQL mantido.
 - Reflex congelado como legado durante a transição.
 - Fluxos Trabalho, Entradas, Conferência, Entregas e Assistente.
-- Importador genérico para XLSX, XLS e CSV.
+- Importador genérico para OFX, XLSX, XLS e CSV.
 - Mapeamento confirmado reaproveitável por origem.
 - Automação separada entre ações automáticas, sugestões e decisões manuais.
 - Critérios de aceite e regra de aprovação entre etapas.
@@ -48,6 +48,42 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 1. Configurar no GitHub o segredo `RAILWAY_TOKEN` e a variável `RAILWAY_DEPLOY_ENABLED=true`; validar o workflow de testes e deploy automático.
 2. Executar, com aceite humano, o ciclo CAP completo: entrada, conferência, aprovação, conciliação, auditoria, relatório e exportação.
 3. Manter o Reflex como fallback até o aceite do ciclo real. A desativação do legado só ocorre depois desse aceite.
+
+## Plano ContaView 3.1 — execução em andamento
+
+**Fase atual:** Fase 1 — Entrada confiável, fundação técnica iniciada em 07/10/2026.
+
+### Implementado nesta retomada
+
+- Migração `0010_origem_ofx_e_mapeamentos.py` criada, ainda não aplicada em produção.
+- Perfil de origem passou a registrar modo `transacional` ou `contabil_estruturado` e regra de competência `restrita`, `ampliada` ou `livre`.
+- Entrada OFX adicionada ao formulário, à validação e ao leitor. O leitor preserva data, valor, descrição, D/C, tipo, FITID, conta bancária, totais de entrada e saída e saldo final informado.
+- Não há cálculo inventado de saldo: quando o OFX não trouxer saldo inicial confiável, a conferência de saldo permanece explicitamente indisponível.
+- Mapeamentos confirmados passaram a ser isolados por empresa, perfil de origem, estrutura e tipo. A estrutura genérica mantém unicidade própria.
+- A tela de mapeamento informa se a origem é transacional, para classificação posterior, ou contábil estruturada, para validação sem reclassificação.
+- O plano completo foi registrado em `docs/plano_contaview_3_1.md`; `README.md`, `etapas.md` e `AGENTS.md` foram alinhados ao novo fluxo.
+
+### Evidências desta retomada
+
+- `web/manage.py test nucleo.tests_entradas nucleo.tests_automacoes --settings=configuracao.settings.teste`: 20 testes aprovados.
+- `web/manage.py test --settings=configuracao.settings.teste`: 31 testes Django aprovados.
+- `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
+- `npm run build` em `web/`: Tailwind e HTMX compilados com sucesso.
+- `web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
+- `web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alterações pendentes.
+
+### Falta para aceitar a Fase 1
+
+1. Aplicar a migração 0010 somente após backup, testes completos e deploy controlado.
+2. Validar OFX, CSV e XLSX reais ou anonimizados da contadora, inclusive planilha suja e arquivo de exemplo.
+3. Confirmar a origem do arquivo de exemplo, datas e histórico suspeitos, produto e versão do Senior, formato de importação, ambiente de homologação e procedimento de reversão.
+4. Definir de onde vem o saldo inicial necessário para a conferência completa de OFX.
+5. Obter autorização da empresa, política de retenção e recuperação antes de dados reais.
+6. Cronometrar uma competência manual para definir as metas numéricas.
+
+### Próximo trabalho técnico
+
+Concluir a verificação da Fase 1 com a suíte completa, CSS compilado e deploy controlado da migração. Depois, iniciar a Fase 2 somente com a estrutura de regras confirmáveis e dados sintéticos; a criação de regras úteis dependerá do razão histórico classificado.
 
 ### Evidências da Etapa 1 concluída
 

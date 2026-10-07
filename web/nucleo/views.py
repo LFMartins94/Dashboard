@@ -410,7 +410,7 @@ def _contexto_mapeamento(requisicao, arquivo, usar_ia=False):
     tipo = (
         requisicao.POST.get("tipo_documento")
         or requisicao.GET.get("tipo_documento")
-        or "lancamentos"
+        or (arquivo.perfil_origem.tipo_documento if arquivo.perfil_origem else "lancamentos")
     )
     try:
         linha_cabecalho = int(valor_cabecalho)

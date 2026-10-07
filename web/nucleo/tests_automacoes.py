@@ -57,6 +57,21 @@ class AutomacoesRecorrentesTest(TestCase):
         self.assertEqual(tarefa.estado, EstadoTarefaAutomacao.CONCLUIDA)
         self.assertEqual(tarefa.tipo, TipoTarefaAutomacao.PROCESSAR_ARQUIVO)
 
+    def test_perfil_de_origem_persiste_modo_e_regra_de_competencia(self):
+        with patch.object(automacoes, "obter_empresa_ativa", return_value={"id": 7}):
+            perfil = automacoes.criar_perfil_origem(
+                self.contexto,
+                nome="Razão do ERP",
+                prefixo_nome="razao_",
+                pasta_referencia="",
+                tipo_documento="lancamentos",
+                modo="contabil_estruturado",
+                regra_competencia="ampliada",
+            )
+
+        self.assertEqual(perfil.modo, "contabil_estruturado")
+        self.assertEqual(perfil.regra_competencia, "ampliada")
+
     def test_falha_de_processamento_pode_ser_reexecutada_no_contexto(self):
         arquivo = ArquivoEntradaTemporario.objects.create(
             usuario=self.usuario, empresa_id=7, competencia="2026-05",

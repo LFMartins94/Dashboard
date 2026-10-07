@@ -5,6 +5,9 @@
     <div>
         <p class="sobretitulo">Mapeamento de entrada</p>
         <h1>{{ arquivo.nome_original }}</h1>
+        {% if arquivo.perfil_origem %}
+        <p class="aviso-origem"><strong>{{ arquivo.perfil_origem.get_modo_display }}.</strong>{% if arquivo.perfil_origem.modo == "transacional" %} A classificação contábil será tratada em uma etapa posterior, sempre com revisão humana.{% else %} Esta origem já contém partidas contábeis; o ContaView validará e rastreará o arquivo sem reclassificá-lo.{% endif %}</p>
+        {% endif %}
         <p class="descricao-pagina">Escolha a estrutura e confirme o significado de cada coluna. As colunas não mapeadas continuam preservadas no original.</p>
     </div>
     <a class="botao-secundario" href="{% url 'nucleo:entradas' %}">Voltar para entradas</a>

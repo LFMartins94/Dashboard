@@ -48,10 +48,12 @@
             <div class="campo"><label for="{{ formulario_origem.prefixo_nome.id_for_label }}">Prefixo</label>{{ formulario_origem.prefixo_nome }}</div>
             <div class="campo"><label for="{{ formulario_origem.pasta_referencia.id_for_label }}">Pasta de referência</label>{{ formulario_origem.pasta_referencia }}<small>Somente referência; o sistema não acessa esta pasta.</small></div>
             <div class="campo"><label for="{{ formulario_origem.tipo_documento.id_for_label }}">Tipo sugerido</label>{{ formulario_origem.tipo_documento }}</div>
+            <div class="campo"><label for="{{ formulario_origem.modo.id_for_label }}">Modo da origem</label>{{ formulario_origem.modo }}</div>
+            <div class="campo"><label for="{{ formulario_origem.regra_competencia.id_for_label }}">Regra de competência</label>{{ formulario_origem.regra_competencia }}</div>
             <button class="botao-secundario" type="submit">Salvar perfil</button>
         </form>
         <div class="lista-perfis">
-            {% for perfil in perfis_origem %}<div><strong>{{ perfil.nome }} · {{ perfil.prefixo_nome }}</strong><small>{{ perfil.get_tipo_documento_display }}{% if perfil.pasta_referencia %} · {{ perfil.pasta_referencia }}{% endif %}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhum perfil de origem foi configurado.</p>{% endfor %}
+            {% for perfil in perfis_origem %}<div><strong>{{ perfil.nome }} · {{ perfil.prefixo_nome }}</strong><small>{{ perfil.get_tipo_documento_display }} · {{ perfil.get_modo_display }} · {{ perfil.get_regra_competencia_display }}{% if perfil.pasta_referencia %} · {{ perfil.pasta_referencia }}{% endif %}</small></div>{% empty %}<p class="vazio-painel compacto">Nenhum perfil de origem foi configurado.</p>{% endfor %}
         </div>
     </article>
 

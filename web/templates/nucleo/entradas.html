@@ -16,14 +16,14 @@
     <section class="painel painel-upload">
         <header class="painel-cabecalho">
             <p class="titulo-secao">Adicionar planilhas</p>
-            <p class="subtitulo-secao">XLSX, XLS ou CSV · até 20 MB e 30.000 linhas por aba</p>
+            <p class="subtitulo-secao">OFX, XLSX, XLS ou CSV · até 20 MB e 30.000 linhas por aba</p>
         </header>
         <form class="formulario-upload" method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <label class="area-upload" for="{{ formulario.arquivos.id_for_label }}">
                 <span class="icone-upload" aria-hidden="true">↑</span>
                 <strong>Selecione um ou mais arquivos</strong>
-                <small>O ContaView lerá abas e cabeçalhos antes de preparar qualquer dado.</small>
+                <small>O ContaView preserva o original, identifica a estrutura e nunca classifica ou aprova nesta etapa.</small>
                 {{ formulario.arquivos }}
             </label>
             {% for erro in formulario.arquivos.errors %}<p class="erro-campo">{{ erro }}</p>{% endfor %}
@@ -53,7 +53,7 @@
         {% for arquivo in temporarios %}
         <article class="arquivo-entrada">
             <span class="extensao-arquivo">{{ arquivo.extensao|upper }}</span>
-            <div><strong>{{ arquivo.nome_original }}</strong><small>{{ arquivo.tamanho_bytes|filesizeformat }} · recebido em {{ arquivo.criado_em|date:"d/m/Y H:i" }}</small></div>
+            <div><strong>{{ arquivo.nome_original }}</strong><small>{{ arquivo.tamanho_bytes|filesizeformat }} · recebido em {{ arquivo.criado_em|date:"d/m/Y H:i" }}{% if arquivo.perfil_origem %} · {{ arquivo.perfil_origem.get_modo_display }}{% endif %}</small></div>
             <a class="botao-secundario" href="{% url 'nucleo:mapear_entrada' arquivo.id %}">Mapear</a>
             <form method="post" action="{% url 'nucleo:descartar_entrada' arquivo.id %}">
                 {% csrf_token %}<button class="botao-texto perigo" type="submit">Descartar</button>

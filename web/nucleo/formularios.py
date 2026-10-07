@@ -5,7 +5,12 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from .models import CategoriaDre, EstadoOperacional
+from .models import (
+    CategoriaDre,
+    EstadoOperacional,
+    ModoPerfilOrigemEntrada,
+    RegraCompetenciaOrigem,
+)
 
 
 class SeletorArquivosMultiplos(forms.ClearableFileInput):
@@ -27,7 +32,7 @@ class FormularioUploadEntrada(forms.Form):
         label="Planilhas",
         widget=SeletorArquivosMultiplos(
             attrs={
-                "accept": ".xlsx,.xls,.csv",
+                "accept": ".ofx,.xlsx,.xls,.csv",
                 "multiple": True,
             }
         ),
@@ -291,6 +296,10 @@ class FormularioPerfilOrigemEntrada(forms.Form):
     prefixo_nome = forms.CharField(label="Prefixo do arquivo", max_length=80)
     pasta_referencia = forms.CharField(label="Pasta de referência", max_length=255, required=False)
     tipo_documento = forms.ChoiceField(label="Tipo sugerido", choices=TIPOS_DOCUMENTO)
+    modo = forms.ChoiceField(label="Modo da origem", choices=ModoPerfilOrigemEntrada.choices)
+    regra_competencia = forms.ChoiceField(
+        label="Regra de competência", choices=RegraCompetenciaOrigem.choices
+    )
 
 
 class FormularioTarefaAutomacao(forms.Form):

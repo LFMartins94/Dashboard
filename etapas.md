@@ -409,3 +409,15 @@ receber arquivos
 ```
 
 O Assistente será considerado complementar. O ciclo contábil determinístico precisa continuar funcionando mesmo sem a chave da OpenAI.
+
+## Evolução do produto — Plano ContaView 3.1
+
+O corte técnico da Etapa 13 não encerra a evolução funcional. A sequência de produto passa a seguir [`docs/plano_contaview_3_1.md`](docs/plano_contaview_3_1.md), mantendo as garantias deste documento.
+
+1. Descoberta com a contadora, autorização da empresa e linha de base do trabalho manual.
+2. Entrada confiável para OFX, CSV e XLSX, com perfil de origem, hash, mapeamento isolado e rastreabilidade.
+3. Classificação assistida por regras confirmadas e revisão por exceção.
+4. Exportação no layout realmente aceito pelo sistema oficial, validada em homologação ou por procedimento reversível.
+5. Conciliação contra uma fonte independente, auditoria mensal e expansão gradual de fluxos.
+
+O trabalho técnico da Fase 1 começou em 07/10/2026. Ele não altera a regra de que dados reais, homologação do Senior e a autorização da empresa precisam ser confirmados antes do aceite operacional.

@@ -14,9 +14,15 @@ from .models import (
     ArquivoEntradaTemporario,
     EstadoArquivoEntrada,
     ModeloMapeamentoEntrada,
+    PerfilOrigemEntrada,
 )
 from .servicos.contexto import CHAVE_CONTEXTO
-from .servicos.entradas import ArquivoEmMemoria, ErroEntrada, inspecionar_selecao
+from .servicos.entradas import (
+    ArquivoEmMemoria,
+    ErroEntrada,
+    assinatura_estrutura,
+    inspecionar_selecao,
+)
 
 
 RAIZ_PROJETO = Path(__file__).resolve().parents[2]
@@ -48,7 +54,7 @@ class EntradasNavegadorTestes(TestCase):
 
         self.assertEqual(resposta.status_code, 200)
         self.assertContains(resposta, "Receba primeiro")
-        self.assertContains(resposta, "XLSX, XLS ou CSV")
+        self.assertContains(resposta, "OFX, XLSX, XLS ou CSV")
 
     @mock.patch("nucleo.servicos.entradas._existe_lote_final", return_value=None)
     @mock.patch("nucleo.views.listar_lotes_contexto", return_value=[])
@@ -195,6 +201,40 @@ class EntradasNavegadorTestes(TestCase):
         self.assertEqual(selecao.sugestao["data"], resultado["abas"][0]["cabecalhos"][0])
         self.assertEqual(selecao.sugestao["valor"], resultado["abas"][0]["cabecalhos"][2])
 
+    def test_mapeamento_de_perfil_nao_e_reutilizado_em_outra_origem(self):
+        caminho = PASTA_FIXTURES / "cap_anonimizada_colunas.csv"
+        conteudo = caminho.read_bytes()
+        resultado = inspecionar_planilha(ArquivoEmMemoria(conteudo, caminho.name))
+        aba = resultado["abas"][0]
+        perfil_a = PerfilOrigemEntrada.objects.create(
+            empresa_id=7, nome="Banco A", prefixo_nome="banco_a_", tipo_documento="extrato"
+        )
+        perfil_b = PerfilOrigemEntrada.objects.create(
+            empresa_id=7, nome="Banco B", prefixo_nome="banco_b_", tipo_documento="extrato"
+        )
+        ModeloMapeamentoEntrada.objects.create(
+            empresa_id=7,
+            perfil_origem=perfil_a,
+            assinatura_estrutura=assinatura_estrutura(aba),
+            tipo_documento="extrato",
+            aba=aba["nome"],
+            linha_cabecalho=aba["linha_cabecalho"],
+            mapeamento={"data": "Data", "valor": "Valor"},
+            confirmado_por=self.usuario,
+        )
+        temporario = ArquivoEntradaTemporario.objects.create(
+            usuario=self.usuario, empresa_id=7, competencia="2026-01",
+            nome_original="banco_b_maio.csv", extensao="csv", tamanho_bytes=len(conteudo),
+            arquivo_sha256="e" * 64, conteudo=conteudo, inspecao={"abas": []},
+            perfil_origem=perfil_b, status=EstadoArquivoEntrada.EM_MAPEAMENTO,
+        )
+
+        selecao = inspecionar_selecao(
+            temporario, aba["nome"], aba["linha_cabecalho"], "extrato"
+        )
+
+        self.assertFalse(selecao.modelo_reutilizado)
+
     @mock.patch("nucleo.servicos.entradas.obter_empresa_ativa", return_value={"id": 7})
     @mock.patch("nucleo.servicos.entradas.salvar_preparacao_confirmada")
     def test_confirmacao_persiste_modelo_e_conclui_temporario(
@@ -279,3 +319,49 @@ class PreparacaoCapTestes(TestCase):
         # A fixture cobre vários meses; linhas fora de janeiro entram no lote
         # com pendência explícita, sem serem descartadas silenciosamente.
         self.assertEqual(resultado["pendentes"], 40)
+
+
+class EntradaOfxTestes(TestCase):
+    CONTEUDO_OFX = b"""OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+ENCODING:USASCII
+
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKACCTFROM><ACCTID>1234</BANKACCTFROM>
+<BANKTRANLIST>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260503<TRNAMT>-45.10<FITID>debito-001<NAME>Tarifa bancaria</STMTTRN>
+<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260504<TRNAMT>100.00<FITID>credito-001<MEMO>Recebimento cliente</STMTTRN>
+</BANKTRANLIST><LEDGERBAL><BALAMT>154.90<DTASOF>20260504</LEDGERBAL>
+</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"""
+
+    def test_ofx_preserva_identificador_e_movimentos_sem_classificar(self):
+        resultado = inspecionar_planilha(
+            ArquivoEmMemoria(self.CONTEUDO_OFX, "extrato.ofx")
+        )
+
+        self.assertTrue(resultado["sucesso"])
+        aba = resultado["abas"][0]
+        self.assertEqual(aba["nome"], "OFX")
+        self.assertEqual(aba["total_linhas"], 2)
+        self.assertEqual(
+            aba["linhas"][0]["valores"]["Identificador OFX"], "debito-001"
+        )
+        self.assertEqual(aba["linhas"][0]["valores"]["Data"], "03/05/2026")
+        self.assertEqual(
+            aba["linhas"][0]["valores"]["Descrição"], "Tarifa bancaria"
+        )
+        self.assertEqual(aba["linhas"][0]["valores"]["Tipo"], "D")
+        self.assertEqual(aba["linhas"][1]["valores"]["Valor"], "100,00")
+        self.assertEqual(resultado["metadados_origem"]["conta_bancaria"], "1234")
+        self.assertEqual(resultado["metadados_origem"]["saldo_final"], "154.90")
+        self.assertIsNone(resultado["metadados_origem"]["saldo_confere"])
+
+    def test_ofx_repetido_no_mesmo_arquivo_e_sinalizado(self):
+        conteudo = self.CONTEUDO_OFX.replace(b"credito-001", b"debito-001")
+        resultado = inspecionar_planilha(ArquivoEmMemoria(conteudo, "duplicado.ofx"))
+
+        self.assertTrue(resultado["sucesso"])
+        self.assertEqual(
+            resultado["metadados_origem"]["identificadores_duplicados"],
+            ["debito-001"],
+        )
