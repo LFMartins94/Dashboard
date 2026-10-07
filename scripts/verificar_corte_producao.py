@@ -12,7 +12,7 @@ from configurar_ambiente_railway import url_direta_supabase
 
 
 RAIZ = Path(__file__).resolve().parents[1]
-MIGRACOES_NUCLEO = {f"000{numero}_" for numero in range(1, 10)}
+MIGRACOES_NUCLEO = {f"00{numero:02d}_" for numero in range(1, 11)}
 TABELAS_PROTEGIDAS = (
     "django_tentativas_login",
     "django_competencias_trabalho",

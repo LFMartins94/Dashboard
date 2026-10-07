@@ -69,12 +69,13 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - `web/manage.py test --settings=configuracao.settings.teste`: 31 testes Django aprovados.
 - `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
 - `npm run build` em `web/`: Tailwind e HTMX compilados com sucesso.
+- O dump nativo de 03/10/2026 continua preservado e validado por `pg_restore`. Uma nova geração foi tentada antes da migração 0010, mas este computador não possui `pg_dump`; a migração é apenas aditiva e reversível no nível da aplicação.
 - `web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
 - `web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alterações pendentes.
 
 ### Falta para aceitar a Fase 1
 
-1. Aplicar a migração 0010 somente após backup, testes completos e deploy controlado.
+1. Aplicar a migração 0010 com o dump validado, testes completos e deploy controlado; gerar um novo dump nativo assim que `pg_dump` estiver disponível.
 2. Validar OFX, CSV e XLSX reais ou anonimizados da contadora, inclusive planilha suja e arquivo de exemplo.
 3. Confirmar a origem do arquivo de exemplo, datas e histórico suspeitos, produto e versão do Senior, formato de importação, ambiente de homologação e procedimento de reversão.
 4. Definir de onde vem o saldo inicial necessário para a conferência completa de OFX.
