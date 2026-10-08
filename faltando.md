@@ -70,6 +70,9 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
 - `npm run build` em `web/`: Tailwind e HTMX compilados com sucesso.
 - O dump nativo de 03/10/2026 continua preservado e validado por `pg_restore`. Uma nova geração foi tentada antes da migração 0010, mas este computador não possui `pg_dump`; a migração é apenas aditiva e reversível no nível da aplicação.
+- Deploy Railway `a8898168-2a87-4c60-884a-b86e66744fc7` concluído com `SUCCESS`; `/saude/` retornou aplicação e banco disponíveis.
+- O deploy não executou o pre-deploy legado. A migração `0010_origem_ofx_e_mapeamentos` foi então aplicada uma vez pelo ambiente Railway e confirmada, com RLS ativo, por consulta somente leitura via pool de sessão.
+- A configuração foi migrada para `.railway/railway.ts`, com variáveis preservadas e somente health check, tempo de espera e pre-deploy restaurados no serviço. O arquivo legado `railway.json` foi removido.
 - `web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
 - `web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alterações pendentes.
 
