@@ -170,7 +170,7 @@ Depois que as migrações forem executadas no ambiente de destino, crie o primei
 
 A senha é solicitada sem aparecer no comando nem no histórico do terminal. Em automação, use `DJANGO_ADMIN_PASSWORD` apenas como variável temporária e remova-a ao terminar.
 
-As migrações 0001 a 0009 foram aplicadas no PostgreSQL de produção durante a Etapa 13, após backup confirmado. Migrações posteriores exigem backup, testes isolados, deploy controlado e verificação de RLS. A suíte isolada continua sendo o primeiro controle de regressão:
+As migrações 0001 a 0010 foram aplicadas no PostgreSQL de produção durante a Etapa 13, após backup confirmado. Migrações posteriores exigem backup, testes isolados, deploy controlado e verificação de RLS. A suíte isolada continua sendo o primeiro controle de regressão:
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"

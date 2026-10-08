@@ -9,6 +9,7 @@ Este procedimento aplica o Django ao PostgreSQL existente sem remover o Reflex a
    - `DATABASE_URL`: pool de sessão IPv4 do Supabase com SSL; a conexão direta é usada apenas pelo backup e por operações nativas de banco.
    - `DJANGO_SECRET_KEY`: segredo aleatório exclusivo da produção.
    - `DJANGO_ALLOWED_HOSTS`: domínio público atribuído ao serviço.
+   - Em Railway, a aplica??o tamb?m permite `healthcheck.railway.app` internamente para a sonda de deploy.
    - `DJANGO_CSRF_TRUSTED_ORIGINS`: `https://` seguido do domínio público.
    - `DJANGO_SETTINGS_MODULE=configuracao.settings.producao`.
    - `DJANGO_SECURE_SSL_REDIRECT=true`.

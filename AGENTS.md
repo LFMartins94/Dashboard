@@ -24,7 +24,7 @@ Para a aplicação Django em `web/`:
 - Toda view ou serviço contábil deve obter empresa e competência por `exigir_contexto(request)` antes de consultar ou alterar dados.
 - Empresa e competência recebidas do navegador nunca substituem o contexto validado da sessão.
 - Login, sessão e limitação de tentativas usam os recursos do Django e tabelas acessíveis somente pelo servidor.
-- As migrações 0001 a 0009 foram aplicadas no corte da Etapa 13. Toda migração posterior exige backup confirmado, testes isolados, deploy controlado e verificação de RLS antes de ser aplicada em produção.
+- As migrações 0001 a 0010 foram aplicadas no corte da Etapa 13. Toda migração posterior exige backup confirmado, testes isolados, deploy controlado e verificação de RLS antes de ser aplicada em produção.
 - As regras baseadas em `rx.State` abaixo valem somente para manutenção do legado Reflex.
 - A fila operacional e o checklist são acessados por `nucleo/servicos/trabalho.py`; templates não consultam o banco.
 - Requisições `GET` da tela Trabalho são somente leitura. Início de competência, mudança de estado e alternância de contexto usam `POST` com CSRF.
@@ -35,7 +35,7 @@ Para a aplicação Django em `web/`:
 - Cada perfil de origem é `transacional` ou `contabil_estruturado`. A origem transacional segue para classificação assistida; a contábil estruturada é somente validada e rastreada. IA não muda esse modo.
 - Mapeamentos confirmados são isolados por empresa, perfil de origem, estrutura e tipo. Um perfil não reutiliza mapeamento de outro perfil.
 - OFX preserva FITID e metadados da origem. Ele não cria partida contábil, nem confirma saldo, quando o arquivo não fornecer saldo inicial confiável.
-- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; as revisões de conciliação ficam em `django_revisoes_conciliacao`, os estados de auditoria em `django_estados_ocorrencias_auditoria`, as entregas em `django_classificacoes_dre`, `django_perfis_exportacao` e `django_geracoes_relatorios`, as automações em `django_modelos_documentos_esperados`, `django_perfis_origem_entrada` e `django_tarefas_automacao`, e as consultas do Assistente em `django_registros_consultas_assistente`. A migração 0010 está pronta para aplicação controlada no próximo deploy.
+- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; as revisões de conciliação ficam em `django_revisoes_conciliacao`, os estados de auditoria em `django_estados_ocorrencias_auditoria`, as entregas em `django_classificacoes_dre`, `django_perfis_exportacao` e `django_geracoes_relatorios`, as automações em `django_modelos_documentos_esperados`, `django_perfis_origem_entrada` e `django_tarefas_automacao`, e as consultas do Assistente em `django_registros_consultas_assistente`. A migra??o 0010 foi aplicada de forma controlada no corte da Fase 1.
 
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.

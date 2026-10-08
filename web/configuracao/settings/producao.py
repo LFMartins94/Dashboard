@@ -27,6 +27,10 @@ if not CSRF_TRUSTED_ORIGINS:
     raise ImproperlyConfigured("DJANGO_CSRF_TRUSTED_ORIGINS é obrigatória em produção.")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = obter_booleano("DJANGO_SECURE_SSL_REDIRECT", True)  # noqa: F405
+# A sonda da Railway chega ao cont?iner por HTTP e precisa obter 200, sem
+# redirecionamento. As duas rotas abaixo s?o p?blicas, somente leitura e n?o
+# retornam dados cont?beis.
+SECURE_REDIRECT_EXEMPT = [r"^saude/$", r"^saude/aplicacao/$"]
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "3600"))

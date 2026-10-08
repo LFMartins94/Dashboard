@@ -583,6 +583,16 @@ class RotasErrosEDiagnosticoTestes(TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.json()["banco"], "disponivel")
 
+    @override_settings(
+        ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1", "healthcheck.railway.app"],
+        SECURE_SSL_REDIRECT=True,
+        SECURE_REDIRECT_EXEMPT=[r"^saude/$"],
+    )
+    def test_sonda_de_saude_nao_redireciona_http_para_https(self):
+        resposta = self.client.get(reverse("nucleo:saude"), HTTP_HOST="healthcheck.railway.app")
+
+        self.assertEqual(resposta.status_code, 200)
+
     @mock.patch("nucleo.views.connection.cursor")
     def test_diagnostico_diferencia_banco_indisponivel(self, cursor):
         cursor.side_effect = RuntimeError("falha simulada")
