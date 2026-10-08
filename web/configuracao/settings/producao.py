@@ -17,12 +17,10 @@ ALLOWED_HOSTS = obter_lista("DJANGO_ALLOWED_HOSTS")  # noqa: F405
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS é obrigatória em produção.")
 
-# A verificação de saúde da Railway alcança o serviço pelo domínio privado.
-# O domínio público continua obrigatório e o host interno só é incluído quando
-# a própria plataforma o fornece ao contêner.
-dominio_privado_railway = os.getenv("RAILWAY_PRIVATE_DOMAIN", "").strip().lower()
-if dominio_privado_railway and dominio_privado_railway not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(dominio_privado_railway)
+# A Railway usa este host exclusivamente para a sonda de saúde durante o deploy.
+# O domínio público continua obrigatório; este host só entra na Railway.
+if os.getenv("RAILWAY_ENVIRONMENT") and "healthcheck.railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 CSRF_TRUSTED_ORIGINS = obter_lista("DJANGO_CSRF_TRUSTED_ORIGINS")  # noqa: F405
 if not CSRF_TRUSTED_ORIGINS:
