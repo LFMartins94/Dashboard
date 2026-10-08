@@ -19,7 +19,7 @@ if not ALLOWED_HOSTS:
 
 # A Railway usa este host exclusivamente para a sonda de saúde durante o deploy.
 # O domínio público continua obrigatório; este host só entra na Railway.
-if os.getenv("RAILWAY_ENVIRONMENT") and "healthcheck.railway.app" not in ALLOWED_HOSTS:
+if "healthcheck.railway.app" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 CSRF_TRUSTED_ORIGINS = obter_lista("DJANGO_CSRF_TRUSTED_ORIGINS")  # noqa: F405
