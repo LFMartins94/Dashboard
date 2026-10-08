@@ -35,7 +35,7 @@ Para a aplicação Django em `web/`:
 - Cada perfil de origem é `transacional` ou `contabil_estruturado`. A origem transacional segue para classificação assistida; a contábil estruturada é somente validada e rastreada. IA não muda esse modo.
 - Mapeamentos confirmados são isolados por empresa, perfil de origem, estrutura e tipo. Um perfil não reutiliza mapeamento de outro perfil.
 - OFX preserva FITID e metadados da origem. Ele não cria partida contábil, nem confirma saldo, quando o arquivo não fornecer saldo inicial confiável.
-- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; as revisões de conciliação ficam em `django_revisoes_conciliacao`, os estados de auditoria em `django_estados_ocorrencias_auditoria`, as entregas em `django_classificacoes_dre`, `django_perfis_exportacao` e `django_geracoes_relatorios`, as automações em `django_modelos_documentos_esperados`, `django_perfis_origem_entrada` e `django_tarefas_automacao`, e as consultas do Assistente em `django_registros_consultas_assistente`. A migra??o 0010 foi aplicada de forma controlada no corte da Fase 1.
+- As tabelas Django de entrada são `django_arquivos_entrada_temporarios` e `django_modelos_mapeamento_entrada`; as revisões de conciliação ficam em `django_revisoes_conciliacao`, os estados de auditoria em `django_estados_ocorrencias_auditoria`, as entregas em `django_classificacoes_dre`, `django_perfis_exportacao` e `django_geracoes_relatorios`, as automações em `django_modelos_documentos_esperados`, `django_perfis_origem_entrada` e `django_tarefas_automacao`, e as consultas do Assistente em `django_registros_consultas_assistente`. A migração 0010 foi aplicada de forma controlada no corte da Fase 1.
 
 Instruções obrigatórias para agentes de IA que trabalham neste projeto.
 Leia este arquivo inteiro antes de modificar qualquer código.
@@ -101,6 +101,7 @@ Não pedir autorização para leituras, testes, correções internas ou outras a
 - A aplicação usa o banco PostgreSQL existente. SQLite pode ser usado somente em testes isolados.
 - O cliente nunca recebe `DATABASE_URL`, chave de banco ou chave da OpenAI.
 - O Assistente é somente leitura e recebe apenas dados filtrados e necessários.
+- Na Railway, o health check interno usa `/saude/aplicacao/`; o processo Gunicorn respeita `PORT`, enquanto `/saude/` permanece como verificação pública de aplicação e banco.
 
 ---
 

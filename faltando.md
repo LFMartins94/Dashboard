@@ -16,9 +16,9 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 **Banco:** PostgreSQL do Supabase continua sendo a base de produção. Não trocar por SQLite.
 
-**Dados:** antes do corte foi criado um dump nativo do schema `public` em `temp/corte/` e validado por `pg_restore`. O arquivo temporário não é versionado. As nove migrações Django do núcleo foram aplicadas e as 14 tabelas novas protegidas por RLS foram confirmadas por consulta somente leitura.
+**Dados:** o dump nativo de 03/10/2026 permanece preservado e validado por `pg_restore`. As dez migrações Django do núcleo foram aplicadas; as tabelas novas foram confirmadas com RLS por consulta somente leitura.
 
-**Produção:** o projeto Railway `ContaView`, serviço `contaview-web` e domínio HTTPS `https://contaview-web-production.up.railway.app` foram criados. As variáveis de produção foram configuradas sem expor valores. A conexão direta IPv6 não era roteável pela Railway e foi substituída pelo pool de sessão IPv4 do Supabase. O deploy `b4586a13-1c63-4264-803f-3f587e022c80` está `SUCCESS`; saúde, banco, login, rota protegida e logout foram validados no domínio público.
+**Produção:** o projeto Railway `ContaView`, serviço `contaview-web` e domínio HTTPS `https://contaview-web-production.up.railway.app` estão ativos. O deploy controlado `52fb45b4-03cd-439e-9665-41412bcfca61` está `SUCCESS`; `/saude/` confirmou aplicação e banco disponíveis, e `/acesso/` respondeu com sucesso. A conexão de produção usa o pool de sessão IPv4 do Supabase.
 
 ## O que já está documentado
 
@@ -55,7 +55,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ### Implementado nesta retomada
 
-- Migração `0010_origem_ofx_e_mapeamentos.py` criada, ainda não aplicada em produção.
+- Migração `0010_origem_ofx_e_mapeamentos.py` aplicada uma única vez em produção, com RLS confirmado por consulta somente leitura.
 - Perfil de origem passou a registrar modo `transacional` ou `contabil_estruturado` e regra de competência `restrita`, `ampliada` ou `livre`.
 - Entrada OFX adicionada ao formulário, à validação e ao leitor. O leitor preserva data, valor, descrição, D/C, tipo, FITID, conta bancária, totais de entrada e saída e saldo final informado.
 - Não há cálculo inventado de saldo: quando o OFX não trouxer saldo inicial confiável, a conferência de saldo permanece explicitamente indisponível.
@@ -69,16 +69,16 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - `web/manage.py test --settings=configuracao.settings.teste`: 31 testes Django aprovados.
 - `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
 - `npm run build` em `web/`: Tailwind e HTMX compilados com sucesso.
-- O dump nativo de 03/10/2026 continua preservado e validado por `pg_restore`. Uma nova geração foi tentada antes da migração 0010, mas este computador não possui `pg_dump`; a migração é apenas aditiva e reversível no nível da aplicação.
-- Deploy Railway `a8898168-2a87-4c60-884a-b86e66744fc7` concluído com `SUCCESS`; `/saude/` retornou aplicação e banco disponíveis.
-- O deploy não executou o pre-deploy legado. A migração `0010_origem_ofx_e_mapeamentos` foi então aplicada uma vez pelo ambiente Railway e confirmada, com RLS ativo, por consulta somente leitura via pool de sessão.
-- A configuração foi migrada para `.railway/railway.ts`, com variáveis preservadas e somente health check, tempo de espera e pre-deploy restaurados no serviço. O arquivo legado `railway.json` foi removido.
+- O dump nativo de 03/10/2026 continua preservado e validado por `pg_restore`. Uma nova geração depende da instalação de `pg_dump` neste computador.
+- Deploy Railway `52fb45b4-03cd-439e-9665-41412bcfca61` concluído com `SUCCESS`; as rotas públicas `/saude/` e `/acesso/` retornaram HTTP 200.
+- O pré-deploy executou `python web/manage.py migrate --noinput`; a migração `0010_origem_ofx_e_mapeamentos` permaneceu sem pendências.
+- A configuração está em `.railway/railway.ts`, preserva variáveis sigilosas, fixa a porta `8000`, usa o health check de aplicação `/saude/aplicacao/` e executa migrações no pré-deploy. O Dockerfile respeita `PORT`.
 - `web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
 - `web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alterações pendentes.
 
 ### Falta para aceitar a Fase 1
 
-1. Aplicar a migração 0010 com o dump validado, testes completos e deploy controlado; gerar um novo dump nativo assim que `pg_dump` estiver disponível.
+1. Gerar novo dump nativo assim que `pg_dump` estiver disponível; o dump validado de 03/10/2026 permanece como referência de recuperação.
 2. Validar OFX, CSV e XLSX reais ou anonimizados da contadora, inclusive planilha suja e arquivo de exemplo.
 3. Confirmar a origem do arquivo de exemplo, datas e histórico suspeitos, produto e versão do Senior, formato de importação, ambiente de homologação e procedimento de reversão.
 4. Definir de onde vem o saldo inicial necessário para a conferência completa de OFX.
@@ -87,7 +87,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ### Próximo trabalho técnico
 
-Concluir a verificação da Fase 1 com a suíte completa, CSS compilado e deploy controlado da migração. Depois, iniciar a Fase 2 somente com a estrutura de regras confirmáveis e dados sintéticos; a criação de regras úteis dependerá do razão histórico classificado.
+A fundação técnica da Fase 1 está concluída. A fase permanece aberta para validação com arquivos reais ou anonimizados e para as definições operacionais listadas acima; não iniciar a Fase 2 sem autorização explícita.
 
 ### Evidências da Etapa 1 concluída
 

@@ -14,8 +14,8 @@ Este procedimento aplica o Django ao PostgreSQL existente sem remover o Reflex a
    - `DJANGO_SETTINGS_MODULE=configuracao.settings.producao`.
    - `DJANGO_SECURE_SSL_REDIRECT=true`.
    - `OPENAI_API_KEY`, somente se o Assistente for habilitado.
-3. O serviço usa o Dockerfile do repositório, health check `/saude/` e pré-deploy `python web/manage.py migrate --noinput`.
-4. O segredo `RAILWAY_TOKEN` e a variável `RAILWAY_DEPLOY_ENABLED=true` estão cadastrados no repositório GitHub para permitir o deploy após os testes.
+3. O serviço usa o Dockerfile do repositório, health check `/saude/aplicacao/`, porta `8000` e pré-deploy `python web/manage.py migrate --noinput`. A rota `/saude/` permanece como verificação pública de aplicação e banco.
+4. Antes de habilitar deploy automatizado, cadastrar no GitHub o segredo `RAILWAY_TOKEN` e a variável `RAILWAY_DEPLOY_ENABLED=true`; validar o workflow em um push controlado.
 
 ## Backup antes da migração
 
