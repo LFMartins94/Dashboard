@@ -73,6 +73,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - Deploy Railway `52fb45b4-03cd-439e-9665-41412bcfca61` concluído com `SUCCESS`; as rotas públicas `/saude/` e `/acesso/` retornaram HTTP 200.
 - O pré-deploy executou `python web/manage.py migrate --noinput`; a migração `0010_origem_ofx_e_mapeamentos` permaneceu sem pendências.
 - A configuração está em `.railway/railway.ts`, preserva variáveis sigilosas, fixa a porta `8000`, usa o health check de aplicação `/saude/aplicacao/` e executa migrações no pré-deploy. O Dockerfile respeita `PORT`.
+- Um XLSX de referência foi inspecionado localmente, sem ser copiado ao repositório: o leitor expandiu a coluna única separada por `;`, identificou cabeçalho na linha 1 e leu 42 linhas sem mapeamento manual. A fonte é contábil estruturada, com 21 partidas, débitos e créditos de R$ 11.243,72 e diferença de R$ 0,00.
 - `web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
 - `web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alterações pendentes.
 
@@ -80,7 +81,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 1. Gerar novo dump nativo assim que `pg_dump` estiver disponível; o dump validado de 03/10/2026 permanece como referência de recuperação.
 2. Validar OFX, CSV e XLSX reais ou anonimizados da contadora, inclusive planilha suja e arquivo de exemplo.
-3. Confirmar a origem do arquivo de exemplo, datas e histórico suspeitos, produto e versão do Senior, formato de importação, ambiente de homologação e procedimento de reversão.
+3. Confirmar a origem do arquivo de exemplo, datas e histórico suspeitos, produto e versão do Senior, formato de importação, ambiente de homologação e procedimento de reversão. O XLSX de referência abrange datas de janeiro a dezembro de 2026, embora seu histórico cite 11/2025; uma partida de 27/05 também está na ordem D/C.
 4. Definir de onde vem o saldo inicial necessário para a conferência completa de OFX.
 5. Obter autorização da empresa, política de retenção e recuperação antes de dados reais.
 6. Cronometrar uma competência manual para definir as metas numéricas.
