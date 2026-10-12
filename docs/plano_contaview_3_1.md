@@ -26,6 +26,8 @@ Cada origem terá um perfil por empresa, com mapeamento confirmado independente 
 
 As regras de competência são `restrita`, `ampliada` ou `livre`. Data futura, incoerente ou fora da regra configurada é uma pendência bloqueante. A hipótese de inversão de dia e mês pode ser mostrada como sugestão, mas nunca aplicada automaticamente.
 
+> Decisão confirmada: o XLSX de referência é uma origem contábil estruturada, com competência `ampliada`. Datas fora de um mês específico e histórico de referência diferente da data do lançamento não são pendências para esse perfil. A validação exige apenas datas válidas, par D/C fechado e demais campos obrigatórios.
+
 ## Fases de execução
 
 ### Fase 0 — Descoberta e autorização
@@ -35,7 +37,7 @@ Executar em paralelo à construção técnica com dados sintéticos.
 1. Obter autorização da empresa para dados reais e definir retenção, acesso, armazenamento e recuperação.
 2. Reunir duas ou três competências anonimizadas de cada fluxo e o razão histórico já classificado.
 3. Confirmar produto e versão do Senior, formato aceito para importação, plano de contas, razão bancário e fonte da conciliação.
-4. Investigar a origem do arquivo de exemplo e confirmar datas, histórico, homologação e procedimento de reversão de uma importação.
+4. Investigar a origem do arquivo de referência, confirmar homologação e procedimento de reversão de uma importação. As datas e o histórico do layout atual foram confirmados como intencionais; ele é aceito pelo Senior e pelo eSolution.
 5. Cronometrar o processo manual para criar a linha de base das métricas.
 
 Nenhum teste em produção será feito sem homologação ou procedimento de reversão conhecido.

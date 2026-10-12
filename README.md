@@ -63,6 +63,12 @@ Quando a estrutura é nova ou ambígua, a contadora corrige o mapeamento manualm
 
 A IA pode sugerir a relação entre nomes de colunas. Ela nunca escolhe sozinha a empresa, o tipo de documento, a competência ou o destino dos dados.
 
+### Leitura, validação e IA
+
+A leitura é separada da interpretação: leitores como Pandas, OpenPyXL e o parser OFX extraem os dados conforme o formato; validações determinísticas conferem tipos, datas, valores e partidas; e a IA pode sugerir o mapeamento de cabeçalhos novos. Pydantic, quando usado, descreve e valida o contrato dos registros normalizados; ele não lê arquivos arbitrários nem toma decisões contábeis.
+
+O objetivo é aceitar cada formato financeiro relevante por um leitor específico, preservando arquivo, aba e linha. Um formato ainda desconhecido entra em prévia e mapeamento manual, ou recebe um leitor novo; dados brutos de células não são enviados à IA.
+
 ### Entrada genérica implementada
 
 A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e preparação:
