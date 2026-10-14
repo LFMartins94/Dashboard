@@ -56,7 +56,7 @@ Prioridade de formatos: CSV e XLSX; OFX permanece opcional quando uma origem o d
 Aceite: a conferência aplicável fecha, o reenvio não cria duplicidade e o arquivo de exemplo é lido sem ajuste manual.
 
 
-> Evidencia de 14/10/2026: o CSV privado `PIS e COFINS 09 2026.csv` usa CP1252, `;`, sete campos e nenhuma linha de cabecalho. A leitura com `linha_cabecalho=0` preservou as 30 linhas. CSV e XLSX sao as prioridades reais; OFX e suporte opcional.
+> Evidencia de 14/10/2026: o CSV privado `PIS e COFINS 09 2026.csv` usa CP1252, `;`, sete campos e nenhuma linha de cabecalho. A leitura com `linha_cabecalho=0` preservou as 30 linhas; o mapeamento posicional preparou todas sem pendencias e preservou o setimo campo quando preenchido. Os totais D/C fecharam em R$ 92.096,73 por lado. CSV e XLSX sao as prioridades reais; OFX e suporte opcional.
 ### Fase 2 — Classificação contábil assistida
 
 - Regras reutilizáveis por descrição, favorecido, documento, valor, operação e padrão bancário.

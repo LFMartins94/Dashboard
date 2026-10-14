@@ -51,15 +51,17 @@ O início de uma competência e cada mudança de estado usam requisições `POST
 
 O importador não é específico da planilha CAP. A primeira versão aceita:
 
-- OFX, com identificação da transação preservada quando fornecida pelo banco.
-- XLSX, incluindo múltiplas abas.
+- CSV, inclusive sem cabeçalho, com separadores `;`, `,`, tabulação ou `|`.
+- XLSX, incluindo múltiplas abas e arquivos que concentram uma linha CSV em uma única coluna.
 - XLS binário e XML Spreadsheet legado quando o leitor conseguir processá-los.
-- CSV com separadores `;`, `,`, tabulação ou `|`.
+- OFX, quando a origem disponibilizar esse formato, com identificação da transação preservada.
 - Arquivos de até 20 MB e 30.000 linhas por aba na configuração inicial.
 
 O sistema identifica possíveis campos como data, valor, descrição, tipo, conta contábil e filial. Nomes diferentes podem representar o mesmo campo. O sistema sugere o mapeamento, mostra uma prévia e exige confirmação antes da gravação.
 
 Quando a estrutura é nova ou ambígua, a contadora corrige o mapeamento manualmente. O modelo aprovado fica salvo para reutilização futura. Arquivos protegidos por senha, PDFs, imagens e XML contábil exigem leitores próprios e entram em etapas posteriores. PDF estruturado será usado somente quando não houver CSV, XLSX ou OFX disponível.
+
+Um CSV contábil estruturado pode ter sete campos posicionais e nenhum cabeçalho. Nesse caso, a prévia cria rótulos neutros (`Coluna 1`, `Coluna 2` e assim por diante), preserva também os campos extras e pede a confirmação do mapeamento uma única vez para aquele perfil de origem. A detecção de delimitador prioriza `;` quando houver vírgula decimal, para que valores brasileiros como `2.795,64` não sejam divididos incorretamente.
 
 A IA pode sugerir a relação entre nomes de colunas. Ela nunca escolhe sozinha a empresa, o tipo de documento, a competência ou o destino dos dados.
 

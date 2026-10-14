@@ -169,6 +169,40 @@ class SubstituicaoAtomicaTest(unittest.TestCase):
 
 
 class PreparacaoGenericaTest(unittest.TestCase):
+    def test_csv_sem_cabecalho_prepara_partidas_dc_e_preserva_campo_extra(self):
+        arquivo = BytesIO(
+            b"30/09/2026;310201002;2795,64;D;PROVISAO PIS;01;158\r\n"
+            b"30/09/2026;210101001;2795,64;C;PROVISAO PIS;01;158\r\n"
+            b"30/09/2026;310201003;12896,73;D;PROVISAO COFINS;02\r\n"
+            b"30/09/2026;210101001;12896,73;C;PROVISAO COFINS;02\r\n"
+        )
+        arquivo.name = "pis_cofins.csv"
+
+        inspecao = inspecionar_planilha(arquivo, linha_cabecalho=0)
+        aba = inspecao["abas"][0]
+        preparadas = importacao.preparar_linhas_mapeadas(
+            aba["linhas"],
+            {
+                "data": "Coluna 1", "conta_contabil": "Coluna 2",
+                "valor": "Coluna 3", "tipo": "Coluna 4",
+                "descricao": "Coluna 5", "filial": "Coluna 6",
+            },
+            "lancamentos", "2026-09",
+        )
+
+        self.assertTrue(inspecao["sucesso"])
+        self.assertEqual(aba["total_linhas"], 4)
+        self.assertEqual(aba["cabecalhos"], [
+            "Coluna 1", "Coluna 2", "Coluna 3", "Coluna 4",
+            "Coluna 5", "Coluna 6", "Coluna 7",
+        ])
+        self.assertTrue(all(linha["status"] == "validado" for linha in preparadas))
+        self.assertEqual(
+            sum((linha["valor"] for linha in preparadas if linha["tipo"] == "D"), Decimal("0")),
+            sum((linha["valor"] for linha in preparadas if linha["tipo"] == "C"), Decimal("0")),
+        )
+        self.assertEqual(preparadas[0]["dados_brutos"]["Coluna 7"], "158")
+
     def test_valor_zero_e_negativo_em_parenteses_sao_preservados(self):
         linhas = [
             {"numero_linha": 2, "valores": {"Valor": 0, "Data": "25/05/2026"}},

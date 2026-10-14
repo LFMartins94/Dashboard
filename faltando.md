@@ -51,7 +51,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 ## Plano ContaView 3.1 - execucao em andamento
 
-**Fase tecnica concluida:** Fase 2 - Classificacao contabil assistida, em 14/10/2026.
+**Fase tecnica concluida:** Fase 2 - Classificacao contabil assistida, em 14/10/2026. A Fase 1 foi revalidada no mesmo dia com um segundo CSV real da contadora.
 
 **Proxima fase autorizavel:** Fase 3 - Revisao por excecao e aprovacao. Nao iniciar sem autorizacao explicita da usuaria.
 
@@ -86,12 +86,19 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 - O arquivo privado `PIS e COFINS 09 2026.csv` foi lido localmente, sem copia para o repositorio: codificacao CP1252, separador `;`, sem cabecalho e sete campos posicionais.
 - O leitor da aplicacao, com `linha_cabecalho=0`, preservou as 30 linhas, incluindo a primeira e a ultima, e criou `Coluna 1` a `Coluna 7` para o mapeamento confirmado.
+- O mapeamento posicional de data, conta contabil, valor, D/C, historico e filial preparou as 30 linhas sem pendencias. Os 12 valores preenchidos no setimo campo permaneceram em `dados_brutos`, sem descarte ou inferencia.
 - Ele contem 18 debitos e 12 creditos, com R$ 92.096,73 em cada lado e diferenca de R$ 0,00. Portanto e uma origem `contabil_estruturado`, nao uma fonte transacional para classificacao.
 - CSV e XLSX passam a ser os formatos prioritarios. OFX continua suportado como opcional, mas nao e requisito nem dependencia do fluxo da contadora.
 
+### Fase 1 revalidada com CSV real
+
+- O defeito de leitura que confundia a virgula decimal com delimitador foi corrigido em `contaview/logic/parsers.py` no commit `2e66f69`.
+- O teste de regressao agora cobre CSV sem cabecalho, com `;`, valor decimal brasileiro, partidas D/C e campo adicional preservado. Ele usa somente dados sinteticos.
+- A validacao do arquivo privado foi somente leitura e memoria local: nao criou lote, perfil, mapeamento nem escrita no banco.
+
 ### Pendencias operacionais que continuam abertas
 
-1. Validar mais CSVs reais ou anonimizados, inclusive uma planilha suja; os CSV e XLSX contabeis estruturados de referencia ja foram lidos com sucesso. OFX so sera tratado se alguma origem vier nesse formato.
+1. Validar mais CSVs reais ou anonimizados, inclusive uma planilha suja. Os CSV e XLSX contabeis estruturados de referencia ja foram lidos com sucesso. OFX so sera tratado se alguma origem vier nesse formato.
 2. Obter razao historico classificado para criar regras iniciais e medir qualidade das sugestoes.
 3. Confirmar origem do arquivo de referencia, produto e versao do Senior, homologacao e procedimento de reversao. Datas e historico foram confirmados como intencionais; o layout e aceito pelo Senior e pelo eSolution.
 4. Obter autorizacao da empresa, politica de retencao, backup e recuperacao antes de dados reais.
@@ -119,9 +126,9 @@ A Fase 3 integrara sugestoes as linhas transacionais com revisao explicita, apli
 ### Falta para aceitar a Fase 1
 
 1. Gerar novo dump nativo assim que `pg_dump` estiver disponível; o dump validado de 03/10/2026 permanece como referência de recuperação.
-2. Validar OFX e CSV reais ou anonimizados da contadora, inclusive uma planilha suja; o XLSX contábil estruturado de referência já foi lido com sucesso.
+2. Validar mais CSVs ou XLSX reais ou anonimizados, inclusive uma planilha suja. O CSV e o XLSX contábeis estruturados de referência já foram lidos e preparados com sucesso; OFX é opcional.
 3. Confirmar a origem do arquivo de referência, produto e versão do Senior, ambiente de homologação e procedimento de reversão. As datas e o histórico foram confirmados como intencionais; o mesmo layout é aceito pelo Senior e pelo eSolution.
-4. Definir de onde vem o saldo inicial necessário para a conferência completa de OFX.
+4. Definir a fonte de conciliação independente quando esse fluxo for iniciado. Saldo inicial de OFX só será tratado se uma origem vier nesse formato.
 5. Obter autorização da empresa, política de retenção e recuperação antes de dados reais.
 6. Cronometrar uma competência manual para definir as metas numéricas.
 
