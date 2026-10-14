@@ -70,7 +70,7 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 
 - `npm run build`: Tailwind e HTMX recompilados.
 - `python web/manage.py test nucleo nucleo.test_classificacao --settings=configuracao.settings.teste`: 85 testes Django aprovados, incluindo nove cenarios de classificacao.
-- `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
+- `python -m unittest discover -s tests -p "test_*.py"`: 32 testes legados aprovados.
 - `python web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
 - `python web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alteracoes pendentes.
 - `python web/manage.py migrate --plan --settings=configuracao.settings.teste`: plano inclui a 0011 sem aplicar migracao.
@@ -82,9 +82,16 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 - A migracao `0011` **nao foi aplicada em producao** e nao houve deploy Railway nesta fase.
 - Antes de aplicar em producao: backup novo validado, testes isolados, verificacao de RLS por consulta somente leitura e deploy controlado. O dump de 03/10/2026 segue preservado; uma nova geracao depende de `pg_dump` neste computador.
 
+### Nova evidencia de entrada CSV (14/10/2026)
+
+- O arquivo privado `PIS e COFINS 09 2026.csv` foi lido localmente, sem copia para o repositorio: codificacao CP1252, separador `;`, sem cabecalho e sete campos posicionais.
+- O leitor da aplicacao, com `linha_cabecalho=0`, preservou as 30 linhas, incluindo a primeira e a ultima, e criou `Coluna 1` a `Coluna 7` para o mapeamento confirmado.
+- Ele contem 18 debitos e 12 creditos, com R$ 92.096,73 em cada lado e diferenca de R$ 0,00. Portanto e uma origem `contabil_estruturado`, nao uma fonte transacional para classificacao.
+- CSV e XLSX passam a ser os formatos prioritarios. OFX continua suportado como opcional, mas nao e requisito nem dependencia do fluxo da contadora.
+
 ### Pendencias operacionais que continuam abertas
 
-1. Validar OFX e CSV reais ou anonimizados, inclusive planilha suja; o XLSX contabil estruturado de referencia ja foi lido com sucesso.
+1. Validar mais CSVs reais ou anonimizados, inclusive uma planilha suja; os CSV e XLSX contabeis estruturados de referencia ja foram lidos com sucesso. OFX so sera tratado se alguma origem vier nesse formato.
 2. Obter razao historico classificado para criar regras iniciais e medir qualidade das sugestoes.
 3. Confirmar origem do arquivo de referencia, produto e versao do Senior, homologacao e procedimento de reversao. Datas e historico foram confirmados como intencionais; o layout e aceito pelo Senior e pelo eSolution.
 4. Obter autorizacao da empresa, politica de retencao, backup e recuperacao antes de dados reais.
@@ -98,7 +105,7 @@ A Fase 3 integrara sugestoes as linhas transacionais com revisao explicita, apli
 
 - `web/manage.py test nucleo.tests_entradas nucleo.tests_automacoes --settings=configuracao.settings.teste`: 20 testes aprovados.
 - `web/manage.py test --settings=configuracao.settings.teste`: 31 testes Django aprovados.
-- `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
+- `python -m unittest discover -s tests -p "test_*.py"`: 32 testes legados aprovados.
 - `npm run build` em `web/`: Tailwind e HTMX compilados com sucesso.
 - O dump nativo de 03/10/2026 continua preservado e validado por `pg_restore`. Uma nova geração depende da instalação de `pg_dump` neste computador.
 - Deploy Railway `52fb45b4-03cd-439e-9665-41412bcfca61` concluído com `SUCCESS`; as rotas públicas `/saude/` e `/acesso/` retornaram HTTP 200.

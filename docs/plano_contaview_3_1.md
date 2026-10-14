@@ -44,7 +44,7 @@ Nenhum teste em produção será feito sem homologação ou procedimento de reve
 
 ### Fase 1 — Entrada confiável
 
-Prioridade de formatos: OFX, CSV, XLSX e PDF estruturado somente quando não houver alternativa. A entrada deve tratar planilhas com cabeçalho fora da primeira linha, totais, linhas vazias, células mescladas, CSV em coluna única, codificação variável e valores ou datas em texto.
+Prioridade de formatos: CSV e XLSX; OFX permanece opcional quando uma origem o disponibilizar. PDF estruturado entra somente quando não houver alternativa. A entrada deve tratar planilhas com cabeçalho fora da primeira linha, totais, linhas vazias, células mescladas, CSV em coluna única, codificação variável e valores ou datas em texto.
 
 - Hash do arquivo para bloquear reenvio.
 - Identificador OFX preservado para detectar repetição de transações.
@@ -55,6 +55,8 @@ Prioridade de formatos: OFX, CSV, XLSX e PDF estruturado somente quando não hou
 
 Aceite: a conferência aplicável fecha, o reenvio não cria duplicidade e o arquivo de exemplo é lido sem ajuste manual.
 
+
+> Evidencia de 14/10/2026: o CSV privado `PIS e COFINS 09 2026.csv` usa CP1252, `;`, sete campos e nenhuma linha de cabecalho. A leitura com `linha_cabecalho=0` preservou as 30 linhas. CSV e XLSX sao as prioridades reais; OFX e suporte opcional.
 ### Fase 2 — Classificação contábil assistida
 
 - Regras reutilizáveis por descrição, favorecido, documento, valor, operação e padrão bancário.

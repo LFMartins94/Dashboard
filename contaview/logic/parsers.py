@@ -1516,6 +1516,28 @@ def inspecionar_ofx(conteudo: bytes) -> dict:
     }
 
 
+def _detectar_delimitador_csv(texto: str) -> str:
+    """Escolhe delimitador sem confundir a virgula decimal brasileira."""
+    amostra = [linha for linha in texto.splitlines() if linha.strip()][:30]
+    if not amostra:
+        return ";"
+    candidatos = (";", ",", "\t", "|")
+    pontuacoes: dict[str, int] = {}
+    for delimitador in candidatos:
+        campos = [
+            len(next(csv.reader([linha], delimiter=delimitador)))
+            for linha in amostra
+        ]
+        pontuacoes[delimitador] = sum(max(quantidade - 1, 0) for quantidade in campos)
+    melhor = max(candidatos, key=lambda item: pontuacoes[item])
+    if pontuacoes[melhor] > 0:
+        return melhor
+    try:
+        return csv.Sniffer().sniff(texto[:4096], delimiters=";,\t|").delimiter
+    except csv.Error:
+        return ";"
+
+
 def inspecionar_planilha(
     arquivo: BinaryIO, linha_cabecalho: int | None = None,
     aba_alvo: str | None = None,
@@ -1585,12 +1607,7 @@ def inspecionar_planilha(
                     continue
             if texto is None:
                 raise ValueError("Não foi possível identificar a codificação do CSV.")
-            try:
-                dialeto = csv.Sniffer().sniff(texto[:4096], delimiters=";,\t|")
-                delimitador = dialeto.delimiter
-            except csv.Error:
-                primeira_linha = texto.splitlines()[0] if texto.splitlines() else ""
-                delimitador = ";" if primeira_linha.count(";") >= primeira_linha.count(",") else ","
+            delimitador = _detectar_delimitador_csv(texto)
             linhas = list(csv.reader(io.StringIO(texto), delimiter=delimitador))
             if len(linhas) > 30000:
                 raise ValueError("O CSV excede 30.000 linhas; divida o arquivo.")

@@ -233,6 +233,23 @@ class PreparacaoGenericaTest(unittest.TestCase):
         self.assertEqual(aba["cabecalhos"], ["Identificacao", "Total"])
         self.assertEqual(aba["total_linhas"], 1)
 
+    def test_csv_sem_cabecalho_prioriza_ponto_e_virgula_sobre_virgula_decimal(self):
+        arquivo = BytesIO(
+            b"30/09/2026;310201002;2795,64;D;PROVISAO PIS;01;158\n"
+            b"30/09/2026;210101001;2795,64;C;PROVISAO PIS;01;158\n"
+        )
+        arquivo.name = "pis_cofins.csv"
+
+        resultado = inspecionar_planilha(arquivo, linha_cabecalho=0, aba_alvo="Planilha")
+
+        self.assertTrue(resultado["sucesso"])
+        aba = resultado["abas"][0]
+        self.assertEqual(aba["total_linhas"], 2)
+        self.assertEqual(aba["cabecalhos"], [f"Coluna {numero}" for numero in range(1, 8)])
+        self.assertEqual(aba["linhas"][0]["valores"]["Coluna 3"], "2795,64")
+        self.assertEqual(aba["linhas"][0]["valores"]["Coluna 7"], "158")
+
+
     def test_planilha_compactada_preserva_linhas_e_valores(self):
         pasta = Workbook()
         aba = pasta.active
