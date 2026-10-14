@@ -88,6 +88,8 @@ A rota `/entradas/` da nova aplicação já executa o fluxo de recebimento e pre
 
 O arquivo fica em armazenamento temporário privado durante o mapeamento. Depois da confirmação, a cópia temporária é apagada porque o original já está preservado no lote. A correção e a aprovação dessas linhas são feitas na tela de Conferência. O perfil de origem define se a fonte é transacional, para classificação assistida posterior, ou contábil estruturada, para validação sem reclassificação. A evidência está em `docs/aceitacao_etapa6.md`.
 
+A tela `/classificacoes/` permite manter regras confirmadas por empresa para fontes transacionais. Cada regra tem criterios, prioridade, vigencia, situacao, historico e metricas de amostragem. Uma regra apenas sugere conta, historico, centro de custo ou D/C; conflito de regras e regra ampla ficam para revisao humana. Fontes contabeis estruturadas nao sao reclassificadas. A implementacao e os limites atuais estao em `docs/aceitacao_fase2_classificacao.md`.
+
 O Assistente está disponível em `/assistente/` para consultas controladas. O servidor calcula lançamentos, conciliação, auditoria, checklist e automações no contexto selecionado e envia à IA somente totais, contagens e estados agregados. Cada resposta mostra as fontes consultadas e registra pergunta, filtros, resposta e fontes para rastreabilidade. CPFs, CNPJs, e-mails e referências nominais de terceiros são ocultados antes da persistência e da chamada à IA. O Assistente não executa alterações contábeis. A evidência está em `docs/aceitacao_etapa12.md`.
 
 A Conciliação está disponível em `/conciliacao/`: ela compara um extrato com uma referência do mesmo contexto, confirma apenas pares inequívocos e mantém candidatos e divergências para decisão humana. A evidência está em `docs/aceitacao_etapa8.md`.
@@ -161,7 +163,7 @@ Os testes da aplicação Django usam SQLite em memória, isolado do banco de pro
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
-.venv\Scripts\python.exe web\manage.py test nucleo
+.venv\Scripts\python.exe web\manage.py test nucleo nucleo.test_classificacao
 ```
 
 ### Autenticação da nova aplicação
@@ -176,11 +178,11 @@ Depois que as migrações forem executadas no ambiente de destino, crie o primei
 
 A senha é solicitada sem aparecer no comando nem no histórico do terminal. Em automação, use `DJANGO_ADMIN_PASSWORD` apenas como variável temporária e remova-a ao terminar.
 
-As migrações 0001 a 0010 foram aplicadas no PostgreSQL de produção durante a Etapa 13, após backup confirmado. Migrações posteriores exigem backup, testes isolados, deploy controlado e verificação de RLS. A suíte isolada continua sendo o primeiro controle de regressão:
+As migracoes 0001 a 0010 foram aplicadas no PostgreSQL de producao durante a Etapa 13, apos backup confirmado. A migracao 0011 de regras de classificacao esta preparada localmente e nao foi aplicada em producao. Migracoes posteriores exigem backup, testes isolados, deploy controlado e verificacao de RLS.
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE="configuracao.settings.teste"
-.venv\Scripts\python.exe web\manage.py test nucleo
+.venv\Scripts\python.exe web\manage.py test nucleo nucleo.test_classificacao
 Remove-Item Env:DJANGO_SETTINGS_MODULE
 ```
 
@@ -221,6 +223,7 @@ A nova implementação fica em `web/`. O legado permanece congelado durante a tr
 - [`docs/aceitacao_etapa3.md`](docs/aceitacao_etapa3.md): controles de autenticação, sessão, contexto e evidências de segurança.
 - [`docs/aceitacao_etapa4.md`](docs/aceitacao_etapa4.md): fila operacional, checklist recorrente, consultas agregadas e aceite da tela Trabalho.
 - [`docs/aceitacao_etapa5.md`](docs/aceitacao_etapa5.md): upload genérico, prévia, mapeamento, hash, modelos reutilizáveis e aceite da preparação.
+- [`docs/aceitacao_fase2_classificacao.md`](docs/aceitacao_fase2_classificacao.md): regras confirmadas, limites de sugestao, testes e seguranca da Fase 2 do Plano 3.1.
 
 ## Critério de conclusão do primeiro ciclo
 

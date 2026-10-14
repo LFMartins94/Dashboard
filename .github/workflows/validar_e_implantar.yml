@@ -27,7 +27,7 @@ jobs:
       - run: npm run build
       - run: python web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste
       - run: python web/manage.py check --settings=configuracao.settings.teste
-      - run: python web/manage.py test nucleo --verbosity 0 --settings=configuracao.settings.teste
+      - run: python web/manage.py test nucleo nucleo.test_classificacao --verbosity 0 --settings=configuracao.settings.teste
       - run: python -m unittest discover -s tests -q
 
   implantar:

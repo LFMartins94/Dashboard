@@ -40,6 +40,8 @@ from .formularios import (
     FormularioModeloDocumentoEsperado,
     FormularioPerfilOrigemEntrada,
     FormularioTarefaAutomacao,
+    FormularioRegraClassificacao,
+    FormularioSituacaoRegraClassificacao,
 )
 from .models import ArquivoEntradaTemporario, EstadoArquivoEntrada
 from .servicos.contexto import (
@@ -78,6 +80,7 @@ from .servicos import conciliacao as servico_conciliacao
 from .servicos import auditoria as servico_auditoria
 from .servicos import relatorios as servico_relatorios
 from .servicos import automacoes as servico_automacoes
+from .servicos import classificacao as servico_classificacao
 
 logger = logging.getLogger(__name__)
 
@@ -786,6 +789,105 @@ def automacoes(requisicao: HttpRequest) -> HttpResponse:
         "formulario_documento": FormularioModeloDocumentoEsperado(),
         "formulario_origem": FormularioPerfilOrigemEntrada(),
         **dados,
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def classificacoes(requisicao: HttpRequest) -> HttpResponse:
+    """Gerencia regras confirmadas; sugestões nunca alteram uma linha nesta tela."""
+    contexto = exigir_contexto(requisicao)
+    regra_em_edicao = None
+    formulario = None
+    try:
+        if requisicao.method == "POST":
+            acao = requisicao.POST.get("acao")
+            if acao == "salvar":
+                formulario = FormularioRegraClassificacao(requisicao.POST)
+                if not formulario.is_valid():
+                    raise servico_classificacao.ErroClassificacao(
+                        "Revise os campos da regra de classificação."
+                    )
+                dados = formulario.cleaned_data
+                regra = servico_classificacao.salvar_regra(
+                    contexto,
+                    requisicao.user,
+                    regra_id=dados["regra_id"],
+                    nome=dados["nome"],
+                    conta_bancaria=dados["conta_bancaria"],
+                    criterios=formulario.criterios(),
+                    prioridade=dados["prioridade"],
+                    vigente_de=dados["vigente_de"],
+                    vigente_ate=dados["vigente_ate"],
+                    conta_contabil_sugerida=dados["conta_contabil_sugerida"],
+                    historico_sugerido=dados["historico_sugerido"],
+                    centro_custo_sugerido=dados["centro_custo_sugerido"],
+                    tipo_sugerido=dados["tipo_sugerido"],
+                )
+                messages.success(
+                    requisicao, f"Regra '{regra.nome}' confirmada para esta empresa."
+                )
+                return redirect("nucleo:classificacoes")
+            if acao == "situacao":
+                formulario_situacao = FormularioSituacaoRegraClassificacao(requisicao.POST)
+                if not formulario_situacao.is_valid():
+                    raise servico_classificacao.ErroClassificacao(
+                        "A regra ou a situação informada é inválida."
+                    )
+                regra = servico_classificacao.definir_situacao(
+                    contexto,
+                    requisicao.user,
+                    formulario_situacao.cleaned_data["regra_id"],
+                    formulario_situacao.cleaned_data["situacao"],
+                )
+                messages.success(requisicao, f"Regra '{regra.nome}' atualizada.")
+                return redirect("nucleo:classificacoes")
+            raise servico_classificacao.ErroClassificacao(
+                "Ação de classificação inválida."
+            )
+
+        regra_id = requisicao.GET.get("regra")
+        if regra_id:
+            regra_em_edicao = servico_classificacao.obter_regra(contexto, int(regra_id))
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Operação de classificação recusada: %s", erro)
+        messages.error(
+            requisicao, str(erro) or "Não foi possível concluir a operação."
+        )
+
+    esta_editando = bool(regra_em_edicao)
+    if formulario is None:
+        inicial = {}
+        if regra_em_edicao:
+            inicial = {
+                "regra_id": regra_em_edicao["id"],
+                "nome": regra_em_edicao["nome"],
+                "conta_bancaria": regra_em_edicao["conta_bancaria"],
+                "prioridade": regra_em_edicao["prioridade"],
+                "vigente_de": regra_em_edicao["vigente_de"],
+                "vigente_ate": regra_em_edicao["vigente_ate"],
+                "conta_contabil_sugerida": regra_em_edicao["conta_contabil_sugerida"],
+                "historico_sugerido": regra_em_edicao["historico_sugerido"],
+                "centro_custo_sugerido": regra_em_edicao["centro_custo_sugerido"],
+                "tipo_sugerido": regra_em_edicao["tipo_sugerido"],
+                **regra_em_edicao["criterios"],
+            }
+        formulario = FormularioRegraClassificacao(initial=inicial)
+    elif formulario.data.get("regra_id"):
+        esta_editando = True
+    try:
+        regras = servico_classificacao.listar_regras(contexto)
+    except (ValueError, DatabaseError) as erro:
+        logger.warning("Falha ao listar regras de classificação: %s", erro)
+        messages.error(requisicao, "Não foi possível carregar as regras agora.")
+        regras = []
+    return render(requisicao, "nucleo/classificacoes.html", {
+        "titulo_pagina": "Classificações",
+        "secao_ativa": "classificacoes",
+        "contexto": contexto,
+        "formulario": formulario,
+        "regra_em_edicao": regra_em_edicao,
+        "esta_editando": esta_editando,
+        "regras": regras,
     })
 
 

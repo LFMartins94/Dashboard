@@ -304,3 +304,49 @@ class FormularioPerfilOrigemEntrada(forms.Form):
 
 class FormularioTarefaAutomacao(forms.Form):
     tarefa_id = forms.IntegerField(min_value=1)
+
+
+class FormularioRegraClassificacao(forms.Form):
+    regra_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput())
+    nome = forms.CharField(label="Nome da regra", max_length=120)
+    conta_bancaria = forms.CharField(label="Conta bancária", max_length=80, required=False)
+    prioridade = forms.IntegerField(label="Prioridade", min_value=1, max_value=9999, initial=100)
+    descricao_contem = forms.CharField(label="Descrição contém", max_length=160, required=False)
+    favorecido_contem = forms.CharField(label="Favorecido contém", max_length=160, required=False)
+    documento_contem = forms.CharField(label="Documento contém", max_length=160, required=False)
+    tipo_operacao = forms.CharField(label="Tipo de operação", max_length=80, required=False)
+    tipo = forms.ChoiceField(
+        label="Tipo de origem", required=False,
+        choices=(("", "Qualquer tipo"), ("C", "Crédito"), ("D", "Débito")),
+    )
+    valor_minimo = forms.DecimalField(label="Valor mínimo", required=False, min_value=0, max_digits=14, decimal_places=2)
+    valor_maximo = forms.DecimalField(label="Valor máximo", required=False, min_value=0, max_digits=14, decimal_places=2)
+    vigente_de = forms.DateField(label="Vigente de", required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    vigente_ate = forms.DateField(label="Vigente até", required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    conta_contabil_sugerida = forms.CharField(label="Conta contábil sugerida", max_length=80, required=False)
+    historico_sugerido = forms.CharField(label="Histórico sugerido", max_length=500, required=False)
+    centro_custo_sugerido = forms.CharField(label="Centro de custo sugerido", max_length=80, required=False)
+    tipo_sugerido = forms.ChoiceField(
+        label="Tipo sugerido", required=False,
+        choices=(("", "Não sugerir"), ("C", "Crédito"), ("D", "Débito")),
+    )
+
+    def criterios(self) -> dict[str, object]:
+        if not hasattr(self, "cleaned_data"):
+            return {}
+        campos = (
+            "descricao_contem", "favorecido_contem", "documento_contem",
+            "tipo_operacao", "tipo", "valor_minimo", "valor_maximo",
+        )
+        return {
+            campo: self.cleaned_data[campo]
+            for campo in campos
+            if self.cleaned_data.get(campo) not in (None, "")
+        }
+
+
+class FormularioSituacaoRegraClassificacao(forms.Form):
+    regra_id = forms.IntegerField(min_value=1)
+    situacao = forms.ChoiceField(
+        choices=(("ativa", "Ativar"), ("em_revisao", "Colocar em revisão"), ("desativada", "Desativar"))
+    )

@@ -178,6 +178,23 @@ class RegraCompetenciaOrigem(models.TextChoices):
     LIVRE = "livre", "Sem bloqueio de competência"
 
 
+class SituacaoRegraClassificacao(models.TextChoices):
+    """Situação controlada de uma regra de classificação."""
+
+    ATIVA = "ativa", "Ativa"
+    EM_REVISAO = "em_revisao", "Em revisão"
+    DESATIVADA = "desativada", "Desativada"
+
+
+class AcaoHistoricoRegraClassificacao(models.TextChoices):
+    """Ação registrada para tornar mudanças de regras auditáveis."""
+
+    CRIADA = "criada", "Criada"
+    ALTERADA = "alterada", "Alterada"
+    DESATIVADA = "desativada", "Desativada"
+    REATIVADA = "reativada", "Reativada"
+
+
 class ArquivoEntradaTemporario(models.Model):
     """Arquivo preservado enquanto a contadora confirma como interpretá-lo."""
 
@@ -564,6 +581,107 @@ class PerfilOrigemEntrada(models.Model):
         ]
         indexes = [
             models.Index(fields=["empresa_id", "ativo", "prefixo_nome"], name="idx_perfil_origem_empresa"),
+        ]
+
+
+class RegraClassificacaoContabil(models.Model):
+    """Regra confirmada pela contadora para sugerir classificação de movimentos."""
+
+    empresa_id = models.PositiveIntegerField()
+    nome = models.CharField(max_length=120)
+    conta_bancaria = models.CharField(max_length=80, blank=True)
+    criterios = models.JSONField(default=dict)
+    prioridade = models.PositiveSmallIntegerField(default=100)
+    vigente_de = models.DateField(null=True, blank=True)
+    vigente_ate = models.DateField(null=True, blank=True)
+    conta_contabil_sugerida = models.CharField(max_length=80, blank=True)
+    historico_sugerido = models.CharField(max_length=500, blank=True)
+    centro_custo_sugerido = models.CharField(max_length=80, blank=True)
+    tipo_sugerido = models.CharField(max_length=1, blank=True)
+    situacao = models.CharField(
+        max_length=20,
+        choices=SituacaoRegraClassificacao.choices,
+        default=SituacaoRegraClassificacao.ATIVA,
+    )
+    vezes_utilizada = models.PositiveIntegerField(default=0)
+    amostras_conferidas = models.PositiveIntegerField(default=0)
+    erros_amostragem = models.PositiveIntegerField(default=0)
+    ultimo_uso_em = models.DateTimeField(null=True, blank=True)
+    criada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="regras_classificacao_criadas",
+    )
+    atualizada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="regras_classificacao_atualizadas",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "django_regras_classificacao_contabil"
+        verbose_name = "regra de classificação contábil"
+        verbose_name_plural = "regras de classificação contábil"
+        constraints = [
+            models.UniqueConstraint(fields=["empresa_id", "nome"], name="uq_regra_class_empresa_nome"),
+            models.CheckConstraint(condition=models.Q(empresa_id__gt=0), name="ck_regra_class_empresa_pos"),
+            models.CheckConstraint(condition=models.Q(prioridade__gte=1), name="ck_regra_class_prioridade"),
+            models.CheckConstraint(
+                condition=models.Q(tipo_sugerido__in=("", "C", "D")),
+                name="ck_regra_class_tipo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(vigente_ate__isnull=True)
+                | models.Q(vigente_de__isnull=True)
+                | models.Q(vigente_ate__gte=models.F("vigente_de")),
+                name="ck_regra_class_vigencia",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(erros_amostragem__lte=models.F("amostras_conferidas")),
+                name="ck_regra_class_amostra",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa_id", "situacao", "prioridade"],
+                name="idx_regra_class_contexto",
+            ),
+            models.Index(fields=["empresa_id", "conta_bancaria"], name="idx_regra_class_banco"),
+        ]
+
+
+class HistoricoRegraClassificacao(models.Model):
+    """Versão imutável de cada criação ou alteração de regra."""
+
+    regra = models.ForeignKey(
+        RegraClassificacaoContabil,
+        on_delete=models.CASCADE,
+        related_name="historico",
+    )
+    acao = models.CharField(max_length=20, choices=AcaoHistoricoRegraClassificacao.choices)
+    dados_anteriores = models.JSONField(default=dict)
+    dados_posteriores = models.JSONField(default=dict)
+    responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="alteracoes_regras_classificacao",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "django_historicos_regras_classificacao"
+        verbose_name = "histórico de regra de classificação"
+        verbose_name_plural = "históricos de regras de classificação"
+        indexes = [
+            models.Index(fields=["regra", "criado_em"], name="idx_hist_regra_class"),
         ]
 
 

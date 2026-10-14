@@ -49,19 +49,50 @@ Este arquivo é o ponto de retomada do projeto. Atualize-o ao encerrar qualquer 
 2. Executar, com aceite humano, o ciclo CAP completo: entrada, conferência, aprovação, conciliação, auditoria, relatório e exportação.
 3. Manter o Reflex como fallback até o aceite do ciclo real. A desativação do legado só ocorre depois desse aceite.
 
-## Plano ContaView 3.1 — execução em andamento
+## Plano ContaView 3.1 - execucao em andamento
 
-**Fase atual:** Fase 1 — Entrada confiável, fundação técnica iniciada em 07/10/2026.
+**Fase tecnica concluida:** Fase 2 - Classificacao contabil assistida, em 14/10/2026.
 
-### Implementado nesta retomada
+**Proxima fase autorizavel:** Fase 3 - Revisao por excecao e aprovacao. Nao iniciar sem autorizacao explicita da usuaria.
 
-- Migração `0010_origem_ofx_e_mapeamentos.py` aplicada uma única vez em produção, com RLS confirmado por consulta somente leitura.
-- Perfil de origem passou a registrar modo `transacional` ou `contabil_estruturado` e regra de competência `restrita`, `ampliada` ou `livre`.
-- Entrada OFX adicionada ao formulário, à validação e ao leitor. O leitor preserva data, valor, descrição, D/C, tipo, FITID, conta bancária, totais de entrada e saída e saldo final informado.
-- Não há cálculo inventado de saldo: quando o OFX não trouxer saldo inicial confiável, a conferência de saldo permanece explicitamente indisponível.
-- Mapeamentos confirmados passaram a ser isolados por empresa, perfil de origem, estrutura e tipo. A estrutura genérica mantém unicidade própria.
-- A tela de mapeamento informa se a origem é transacional, para classificação posterior, ou contábil estruturada, para validação sem reclassificação.
-- O plano completo foi registrado em `docs/plano_contaview_3_1.md`; `README.md`, `etapas.md` e `AGENTS.md` foram alinhados ao novo fluxo.
+### Implementado na Fase 2
+
+- Nova rota autenticada `/classificacoes/`, limitada a empresa e competencia validadas na sessao.
+- Regras confirmadas por empresa com conta bancaria opcional, criterios por descricao, favorecido, documento, tipo de operacao, D/C, faixa de valor, prioridade e vigencia.
+- Sugestoes de conta, historico, centro de custo e D/C sao deterministicas. O servico apenas retorna sugestao: nao altera linhas, nao cria lancamentos e nao aprova lotes.
+- Regra somente com `PIX`, criterios desconhecidos, valores invalidos, vigencias incoerentes, nomes repetidos e regras ativas duplicadas sao bloqueados.
+- Regras na mesma prioridade viram conflito explicito. Regra desativada ou em revisao nao produz sugestao.
+- Gestao ativa, em revisao e desativada; historico imutavel de criacao e alteracoes; edicao nao reativa regra desativada de forma implicita; metricas de uso e amostragem.
+- A origem `contabil_estruturado`, como o XLSX CAP, continua somente no fluxo de validacao, rastreabilidade e exportacao.
+- Migracao `0011_regras_classificacao_contabil` preparada para `django_regras_classificacao_contabil` e `django_historicos_regras_classificacao`, com RLS para PostgreSQL.
+
+### Evidencias da Fase 2
+
+- `npm run build`: Tailwind e HTMX recompilados.
+- `python web/manage.py test nucleo nucleo.test_classificacao --settings=configuracao.settings.teste`: 85 testes Django aprovados, incluindo nove cenarios de classificacao.
+- `python -m unittest discover -s tests -p "test_*.py"`: 31 testes legados aprovados.
+- `python web/manage.py check --settings=configuracao.settings.teste`: sem problemas.
+- `python web/manage.py makemigrations --check --dry-run --settings=configuracao.settings.teste`: sem alteracoes pendentes.
+- `python web/manage.py migrate --plan --settings=configuracao.settings.teste`: plano inclui a 0011 sem aplicar migracao.
+- `git diff --check`: aprovado.
+- Evidencia completa: `docs/aceitacao_fase2_classificacao.md`.
+
+### Seguranca e producao
+
+- A migracao `0011` **nao foi aplicada em producao** e nao houve deploy Railway nesta fase.
+- Antes de aplicar em producao: backup novo validado, testes isolados, verificacao de RLS por consulta somente leitura e deploy controlado. O dump de 03/10/2026 segue preservado; uma nova geracao depende de `pg_dump` neste computador.
+
+### Pendencias operacionais que continuam abertas
+
+1. Validar OFX e CSV reais ou anonimizados, inclusive planilha suja; o XLSX contabil estruturado de referencia ja foi lido com sucesso.
+2. Obter razao historico classificado para criar regras iniciais e medir qualidade das sugestoes.
+3. Confirmar origem do arquivo de referencia, produto e versao do Senior, homologacao e procedimento de reversao. Datas e historico foram confirmados como intencionais; o layout e aceito pelo Senior e pelo eSolution.
+4. Obter autorizacao da empresa, politica de retencao, backup e recuperacao antes de dados reais.
+5. Cronometrar competencia manual para definir metas de reducao de tempo e classificacao por regra.
+
+### Proximo trabalho tecnico
+
+A Fase 3 integrara sugestoes as linhas transacionais com revisao explicita, aplicacao individual e em lote, amostragem e bloqueio de aprovacao enquanto houver pendencias. Ela nao deve alterar a origem contabil estruturada nem iniciar exportacao ao Senior/eSolution.
 
 ### Evidências desta retomada
 

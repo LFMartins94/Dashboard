@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<section class="pagina-cabecalho">
+    <div>
+        <p class="etiqueta">Revisão por exceção</p>
+        <h1>Classificações contábeis</h1>
+        <p>Crie regras confirmadas para sugerir classificações em fontes transacionais. A sugestão nunca altera uma linha sem revisão.</p>
+    </div>
+    <div class="resumo-contexto"><strong>{{ contexto.empresa_nome }}</strong><span>{{ contexto.competencia_exibicao }}</span></div>
+</section>
+
+<section class="grade-duas-colunas classificacoes-grade">
+    <article class="painel formulario-classificacao">
+        <header class="painel-cabecalho">
+            <div><h2>{% if esta_editando %}Editar regra{% else %}Nova regra confirmada{% endif %}</h2><p>Critérios amplos ou conflitantes ficam bloqueados antes do uso.</p></div>
+            {% if esta_editando %}<a class="botao-secundario" href="{% url 'nucleo:classificacoes' %}">Cancelar edição</a>{% endif %}
+        </header>
+        <form method="post" class="formulario-grade" novalidate>
+            {% csrf_token %}<input type="hidden" name="acao" value="salvar">{{ formulario.regra_id }}
+            {% if formulario.non_field_errors %}<div class="mensagem erro">{{ formulario.non_field_errors }}</div>{% endif %}
+            <div class="campo campo-amplo"><label for="{{ formulario.nome.id_for_label }}">{{ formulario.nome.label }}</label>{{ formulario.nome }}{{ formulario.nome.errors }}</div>
+            <div class="campo"><label for="{{ formulario.conta_bancaria.id_for_label }}">{{ formulario.conta_bancaria.label }}</label>{{ formulario.conta_bancaria }}{{ formulario.conta_bancaria.errors }}</div>
+            <div class="campo"><label for="{{ formulario.prioridade.id_for_label }}">{{ formulario.prioridade.label }}</label>{{ formulario.prioridade }}{{ formulario.prioridade.errors }}</div>
+            <div class="campo"><label for="{{ formulario.descricao_contem.id_for_label }}">{{ formulario.descricao_contem.label }}</label>{{ formulario.descricao_contem }}{{ formulario.descricao_contem.errors }}</div>
+            <div class="campo"><label for="{{ formulario.favorecido_contem.id_for_label }}">{{ formulario.favorecido_contem.label }}</label>{{ formulario.favorecido_contem }}{{ formulario.favorecido_contem.errors }}</div>
+            <div class="campo"><label for="{{ formulario.documento_contem.id_for_label }}">{{ formulario.documento_contem.label }}</label>{{ formulario.documento_contem }}{{ formulario.documento_contem.errors }}</div>
+            <div class="campo"><label for="{{ formulario.tipo_operacao.id_for_label }}">{{ formulario.tipo_operacao.label }}</label>{{ formulario.tipo_operacao }}{{ formulario.tipo_operacao.errors }}</div>
+            <div class="campo"><label for="{{ formulario.tipo.id_for_label }}">{{ formulario.tipo.label }}</label>{{ formulario.tipo }}{{ formulario.tipo.errors }}</div>
+            <div class="campo"><label for="{{ formulario.valor_minimo.id_for_label }}">{{ formulario.valor_minimo.label }}</label>{{ formulario.valor_minimo }}{{ formulario.valor_minimo.errors }}</div>
+            <div class="campo"><label for="{{ formulario.valor_maximo.id_for_label }}">{{ formulario.valor_maximo.label }}</label>{{ formulario.valor_maximo }}{{ formulario.valor_maximo.errors }}</div>
+            <div class="campo"><label for="{{ formulario.vigente_de.id_for_label }}">{{ formulario.vigente_de.label }}</label>{{ formulario.vigente_de }}{{ formulario.vigente_de.errors }}</div>
+            <div class="campo"><label for="{{ formulario.vigente_ate.id_for_label }}">{{ formulario.vigente_ate.label }}</label>{{ formulario.vigente_ate }}{{ formulario.vigente_ate.errors }}</div>
+            <div class="campo"><label for="{{ formulario.conta_contabil_sugerida.id_for_label }}">{{ formulario.conta_contabil_sugerida.label }}</label>{{ formulario.conta_contabil_sugerida }}{{ formulario.conta_contabil_sugerida.errors }}</div>
+            <div class="campo"><label for="{{ formulario.historico_sugerido.id_for_label }}">{{ formulario.historico_sugerido.label }}</label>{{ formulario.historico_sugerido }}{{ formulario.historico_sugerido.errors }}</div>
+            <div class="campo"><label for="{{ formulario.centro_custo_sugerido.id_for_label }}">{{ formulario.centro_custo_sugerido.label }}</label>{{ formulario.centro_custo_sugerido }}{{ formulario.centro_custo_sugerido.errors }}</div>
+            <div class="campo"><label for="{{ formulario.tipo_sugerido.id_for_label }}">{{ formulario.tipo_sugerido.label }}</label>{{ formulario.tipo_sugerido }}{{ formulario.tipo_sugerido.errors }}</div>
+            <p class="nota-formulario campo-amplo">A regra deve conter descrição, favorecido, documento ou tipo de operação. Uma regra apenas com &quot;PIX&quot; não é aceita.</p>
+            <div class="acoes-formulario campo-amplo"><button class="botao-primario" type="submit">{% if esta_editando %}Salvar alterações{% else %}Confirmar regra{% endif %}</button></div>
+        </form>
+    </article>
+
+    <article class="painel regras-ativas">
+        <header class="painel-cabecalho"><div><h2>Regras da empresa</h2><p>{{ regras|length }} regra(s) cadastrada(s). A prioridade menor é avaliada primeiro.</p></div></header>
+        <div class="lista-regras">
+            {% for regra in regras %}
+            <article class="item-regra {% if regra.situacao != 'ativa' %}inativa{% endif %}">
+                <header><div><span class="selo-regra {{ regra.situacao }}">{{ regra.situacao_exibicao }}</span><h3>{{ regra.nome }}</h3></div><span class="prioridade-regra">Prioridade {{ regra.prioridade }}</span></header>
+                <p class="criterios-regra">{% for criterio in regra.criterios_exibicao %}<span>{{ criterio.nome }}: {{ criterio.valor }}</span>{% endfor %}</p>
+                <dl><div><dt>Conta</dt><dd>{{ regra.conta_contabil_sugerida|default:"Não sugerir" }}</dd></div><div><dt>Histórico</dt><dd>{{ regra.historico_sugerido|default:"Não sugerir" }}</dd></div><div><dt>Amostra</dt><dd>{{ regra.erros_amostragem }}/{{ regra.amostras_conferidas }} erro(s)</dd></div></dl>
+                <footer>
+                    <a class="link-acao" href="{% url 'nucleo:classificacoes' %}?regra={{ regra.id }}">Editar</a>
+                    {% if regra.situacao == 'ativa' %}
+                    <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="situacao"><input type="hidden" name="regra_id" value="{{ regra.id }}"><input type="hidden" name="situacao" value="em_revisao"><button class="link-acao" type="submit">Colocar em revisão</button></form>
+                    {% endif %}
+                    {% if regra.situacao != 'ativa' %}
+                    <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="situacao"><input type="hidden" name="regra_id" value="{{ regra.id }}"><input type="hidden" name="situacao" value="ativa"><button class="link-acao" type="submit">Ativar</button></form>
+                    {% endif %}
+                    {% if regra.situacao != 'desativada' %}
+                    <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="situacao"><input type="hidden" name="regra_id" value="{{ regra.id }}"><input type="hidden" name="situacao" value="desativada"><button class="link-acao" type="submit">Desativar</button></form>
+                    {% endif %}
+                </footer>
+            </article>
+            {% empty %}
+            <div class="vazio-painel"><strong>Nenhuma regra confirmada</strong><p>Cadastre regras sintéticas agora; elas só sugerem classificação quando houver uma fonte transacional.</p></div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

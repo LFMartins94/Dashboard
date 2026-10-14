@@ -45,6 +45,7 @@ urlpatterns = [
         views.conferencia,
         name="conferencia",
     ),
+    path("classificacoes/", views.classificacoes, name="classificacoes"),
     path("conciliacao/", views.conciliacao, name="conciliacao"),
     path("auditoria/", views.auditoria, name="auditoria"),
     path("entregas/", views.entregas, name="entregas"),

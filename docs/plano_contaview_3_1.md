@@ -106,6 +106,10 @@ Executar uma competência em paralelo ao processo manual, comparar resultado, di
 | Redução de tempo | Definir após a linha de base |
 | Erros encontrados na amostra | Medir e reduzir por competência |
 
-## Situação desta implementação
+## Situacao desta implementacao
 
-A fundação técnica da Fase 1 iniciou em 07/10/2026: perfis de origem possuem os dois modos e a regra de competência; OFX, CSV, XLS e XLSX são aceitos; FITID, conta bancária, totais e saldo final do OFX são preservados; e os mapeamentos confirmados são isolados por perfil de origem. A classificação, a revisão por exceção e a exportação específica do Senior continuam pendentes das descobertas da Fase 0.
+A fundacao tecnica da Fase 1 foi concluida: perfis de origem possuem os dois modos e regra de competencia; OFX, CSV, XLS e XLSX sao aceitos; FITID, conta bancaria, totais e saldo final do OFX sao preservados; os mapeamentos confirmados sao isolados por perfil de origem.
+
+A implementacao tecnica da Fase 2 foi concluida em 14/10/2026. A rota `/classificacoes/` permite cadastrar, editar, colocar em revisao, ativar e desativar regras confirmadas por empresa. Ela preserva criterios, prioridade, vigencia, responsavel, historico de mudancas e metricas de amostragem. O servico retorna somente sugestao deterministica; conflito na maior prioridade retorna pendencia e nenhuma sugestao altera uma linha por conta propria. Regra somente com `PIX` e bloqueada.
+
+A migracao `0011_regras_classificacao_contabil` esta pronta, com RLS para PostgreSQL, mas nao foi aplicada em producao. A aplicacao exige backup novo confirmado, teste isolado, deploy controlado e verificacao de RLS. Aplicacao de sugestoes as linhas, revisao em lote, amostragem operacional e aprovacao pertencem a Fase 3.
